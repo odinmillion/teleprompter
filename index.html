@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Суфлер">
+<meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Суфлер</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #EEF0F3;
+    --panel: #FFFFFF;
+    --fg: #17191C;
+    --muted: #6A7079;
+    --line: #D8DCE2;
+    --control: #E5E8ED;
+    --accent: #B9840A;
+    --accent-fg: #FFFFFF;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #111316;
+      --panel: #1A1D21;
+      --fg: #ECEDEF;
+      --muted: #9BA2AB;
+      --line: #2A2E34;
+      --control: #262A30;
+      --accent: #F0B43C;
+      --accent-fg: #141414;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #111316;
+    --panel: #1A1D21;
+    --fg: #ECEDEF;
+    --muted: #9BA2AB;
+    --line: #2A2E34;
+    --control: #262A30;
+    --accent: #F0B43C;
+    --accent-fg: #141414;
+  }
+  html {
+    height: 100%;
+    background: var(--bg);
+    scroll-padding-top: env(safe-area-inset-top, 0px);
+  }
+  html[data-mode="prompt"] {
+    background: #000;
+  }
+  body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
+  }
+  html[data-mode="prompt"] body { background: #000; }
+  [hidden] { display: none !important; }
+  button { font-family: inherit; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- Editor ---------- */
+  .editor {
+    box-sizing: border-box;
+    height: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 12px 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  h1 {
+    margin: 0;
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .primary {
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-size: 16px;
+    font-weight: 600;
+    padding: 11px 20px;
+  }
+  textarea {
+    box-sizing: border-box;
+    width: 100%;
+    height: 40dvh;
+    min-height: 160px;
+    flex: none;
+    resize: none;
+    padding: 14px;
+    background: var(--panel);
+    color: var(--fg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    font: 17px/1.45 inherit;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+  .textbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: -4px;
+  }
+  .textbar .muted { color: var(--muted); font-size: 14px; }
+  .textbar .spacer { flex: 1; }
+  .ghost {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-size: 15px;
+    font-weight: 600;
+    padding: 6px 8px;
+    border-radius: 8px;
+  }
+  .settings {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-top: 1px solid var(--line);
+    font-size: 16px;
+  }
+  .row:first-child { border-top: none; }
+  .row.range { grid-template-columns: minmax(96px, auto) 1fr 40px; }
+  .row.range output {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+  }
+  input[type="range"] {
+    width: 100%;
+    margin: 0;
+    accent-color: var(--accent);
+  }
+  select {
+    font: inherit;
+    font-size: 15px;
+    color: var(--fg);
+    background: var(--control);
+    border: none;
+    border-radius: 8px;
+    padding: 7px 10px;
+  }
+  input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 22px;
+    height: 22px;
+    margin: 0;
+  }
+  input[type="checkbox"][switch] { width: auto; height: auto; }
+  .hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .hint b { color: var(--fg); font-weight: 600; }
+
+  /* ---------- Prompter ---------- */
+  .prompter {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    color: #fff;
+    overflow: hidden;
+  }
+  .stage {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    cursor: pointer;
+  }
+  .stage.mh { transform: scaleX(-1); }
+  .stage.mv { transform: scaleY(-1); }
+  .stage.mh.mv { transform: scale(-1, -1); }
+  .track {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: 0.005em;
+    will-change: transform;
+  }
+  .guide {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.3);
+    pointer-events: none;
+  }
+  .guide::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -6px;
+    border: 7px solid transparent;
+    border-left: 10px solid rgba(255, 255, 255, 0.55);
+    border-right: 0;
+  }
+  .bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px;
+    background: rgba(0, 0, 0, 0.78);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    transition: opacity 0.25s;
+  }
+  .bar.hidden { opacity: 0; pointer-events: none; }
+  .rowbar { display: flex; align-items: center; gap: 6px; }
+  .group { display: flex; align-items: center; gap: 4px; }
+  .group + .group { margin-left: 8px; }
+  .bar button {
+    background: #222;
+    color: #fff;
+    border: none;
+    border-radius: 9px;
+    min-width: 40px;
+    height: 40px;
+    padding: 0 10px;
+    font-size: 17px;
+    font-weight: 600;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .bar button.on { background: #F0B43C; color: #141414; }
+  .bar output {
+    min-width: 36px;
+    text-align: center;
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .bar .play {
+    margin-left: auto;
+    min-width: 96px;
+    background: #fff;
+    color: #000;
+  }
+  .toast {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3;
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 12px;
+    font-size: 18px;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .toast.show { opacity: 1; }
+  .progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    height: calc(3px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, 0.08);
+  }
+  #progressFill { height: 3px; width: 0; background: #F0B43C; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bar, .toast { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<main id="editor" class="editor">
+  <header class="top">
+    <h1>Суфлер</h1>
+    <button id="startBtn" class="primary" type="button">Начать</button>
+  </header>
+
+  <textarea id="text" placeholder="Вставьте сюда текст сценария…" spellcheck="false" autocapitalize="sentences"></textarea>
+
+  <div class="textbar">
+    <span id="words" class="muted">0 слов</span>
+    <span class="spacer"></span>
+    <button id="pasteBtn" class="ghost" type="button">Вставить из буфера</button>
+    <button id="clearBtn" class="ghost" type="button">Очистить</button>
+  </div>
+
+  <section class="settings" aria-label="Настройки">
+    <label class="row range">
+      <span>Скорость</span>
+      <input type="range" id="speed" min="5" max="150" step="1">
+      <output id="speedOut">40</output>
+    </label>
+    <label class="row range">
+      <span>Размер шрифта</span>
+      <input type="range" id="font" min="20" max="120" step="2">
+      <output id="fontOut">48</output>
+    </label>
+    <label class="row range">
+      <span>Поля по бокам</span>
+      <input type="range" id="margin" min="0" max="30" step="1">
+      <output id="marginOut">6%</output>
+    </label>
+    <div class="row">
+      <label for="color">Цвет текста</label>
+      <select id="color">
+        <option value="#ffffff">Белый</option>
+        <option value="#ffd84a">Жёлтый</option>
+        <option value="#7fe08a">Зелёный</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="align">Выравнивание</label>
+      <select id="align">
+        <option value="left">По левому краю</option>
+        <option value="center">По центру</option>
+      </select>
+    </div>
+    <label class="row">
+      <span>Зеркало по горизонтали ↔</span>
+      <input type="checkbox" switch id="mirrorH">
+    </label>
+    <label class="row">
+      <span>Зеркало по вертикали ↕</span>
+      <input type="checkbox" switch id="mirrorV">
+    </label>
+    <label class="row">
+      <span>Линия чтения</span>
+      <input type="checkbox" switch id="guide">
+    </label>
+  </section>
+
+  <p class="hint">
+    На экране суфлера: <b>тап</b> — старт и пауза, <b>свайп вверх или вниз</b> — скорость во время движения и прокрутка на паузе.
+    Работают клавиатура и Bluetooth‑пульты: пробел — старт/пауза, стрелки — скорость и шрифт, M и V — зеркало, R — в начало.
+    Для полного экрана добавьте страницу на экран «Домой» в Safari. Текст и настройки сохраняются на этом устройстве.
+  </p>
+</main>
+
+<div id="prompter" class="prompter" hidden>
+  <div id="bar" class="bar">
+    <div class="rowbar">
+      <button id="exitBtn" type="button" title="К тексту">←</button>
+      <button id="restartBtn" type="button" title="В начало">⟲</button>
+      <button id="playBtn" class="play" type="button">Старт</button>
+    </div>
+    <div class="rowbar">
+      <span class="group">
+        <button id="fontDown" type="button" title="Шрифт меньше">A−</button>
+        <button id="fontUp" type="button" title="Шрифт больше">A+</button>
+      </span>
+      <span class="group">
+        <button id="speedDown" type="button" title="Медленнее">−</button>
+        <output id="speedShow">40</output>
+        <button id="speedUp" type="button" title="Быстрее">+</button>
+      </span>
+      <span class="group">
+        <button id="mirHBtn" type="button" title="Зеркало по горизонтали">↔</button>
+        <button id="mirVBtn" type="button" title="Зеркало по вертикали">↕</button>
+      </span>
+    </div>
+  </div>
+  <div id="stage" class="stage">
+    <div id="guideLine" class="guide"></div>
+    <div id="track" class="track"></div>
+  </div>
+  <div id="toast" class="toast"></div>
+  <div class="progress"><div id="progressFill"></div></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY_SETTINGS = 'tp.settings';
+  var KEY_TEXT = 'tp.text';
+  var GUIDE_RATIO = 0.33;
+
+  var DEFAULTS = {
+    speed: 40, font: 48, margin: 6, color: '#ffffff', align: 'left',
+    mirrorH: false, mirrorV: false, guide: true
+  };
+
+  function load(key) {
+    try { var v = localStorage.getItem(key); return v === null ? null : v; } catch (e) { return null; }
+  }
+  function save(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) {}
+  }
+
+  var S = {};
+  (function () {
+    var stored = null;
+    try { stored = JSON.parse(load(KEY_SETTINGS) || 'null'); } catch (e) { stored = null; }
+    for (var k in DEFAULTS) {
+      S[k] = (stored && typeof stored[k] === typeof DEFAULTS[k]) ? stored[k] : DEFAULTS[k];
+    }
+  })();
+  var text = load(KEY_TEXT) || '';
+
+  var editor = $('editor'), prompter = $('prompter'), stage = $('stage'), track = $('track');
+  var guideLine = $('guideLine'), bar = $('bar'), toastEl = $('toast'), progressFill = $('progressFill');
+  var textarea = $('text'), wordsEl = $('words');
+  var inputs = {
+    speed: $('speed'), font: $('font'), margin: $('margin'), color: $('color'), align: $('align'),
+    mirrorH: $('mirrorH'), mirrorV: $('mirrorV'), guide: $('guide')
+  };
+  var outs = { speed: $('speedOut'), font: $('fontOut'), margin: $('marginOut') };
+  var speedShow = $('speedShow'), playBtn = $('playBtn'), mirHBtn = $('mirHBtn'), mirVBtn = $('mirVBtn');
+
+  var mode = 'edit';
+  var pos = 0, maxPos = 0, playing = false, last = 0, raf = 0;
+  var saveTimer = 0, toastTimer = 0, barTimer = 0;
+
+  function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+
+  function plural(n, one, few, many) {
+    var m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  }
+  function updateWords() {
+    var n = text.trim() ? text.trim().split(/\s+/).length : 0;
+    wordsEl.textContent = n + ' ' + plural(n, 'слово', 'слова', 'слов');
+  }
+
+  function saveSettings() { save(KEY_SETTINGS, JSON.stringify(S)); }
+  function saveTextSoon() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () { save(KEY_TEXT, text); }, 300);
+  }
+
+  function toast(msg, ms) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, ms || 900);
+  }
+
+  function syncInputs() {
+    inputs.speed.value = S.speed; outs.speed.textContent = S.speed;
+    inputs.font.value = S.font; outs.font.textContent = S.font;
+    inputs.margin.value = S.margin; outs.margin.textContent = S.margin + '%';
+    inputs.color.value = S.color;
+    inputs.align.value = S.align;
+    inputs.mirrorH.checked = S.mirrorH;
+    inputs.mirrorV.checked = S.mirrorV;
+    inputs.guide.checked = S.guide;
+  }
+
+  function applySettings() {
+    track.style.fontSize = S.font + 'px';
+    track.style.paddingLeft = S.margin + '%';
+    track.style.paddingRight = S.margin + '%';
+    track.style.color = S.color;
+    track.style.textAlign = S.align;
+    stage.classList.toggle('mh', S.mirrorH);
+    stage.classList.toggle('mv', S.mirrorV);
+    guideLine.hidden = !S.guide;
+    mirHBtn.classList.toggle('on', S.mirrorH);
+    mirVBtn.classList.toggle('on', S.mirrorV);
+    speedShow.textContent = S.speed;
+    syncInputs();
+    if (mode === 'prompt') layout();
+  }
+
+  function layout() {
+    var h = stage.clientHeight;
+    var guideY = Math.round(h * GUIDE_RATIO);
+    track.style.paddingTop = guideY + 'px';
+    track.style.paddingBottom = (h - guideY) + 'px';
+    guideLine.style.top = guideY + 'px';
+    maxPos = Math.max(0, track.offsetHeight - h);
+    pos = clamp(pos, 0, maxPos);
+    render();
+  }
+
+  function render() {
+    track.style.transform = 'translate3d(0,' + (-pos) + 'px,0)';
+    progressFill.style.width = (maxPos ? (pos / maxPos * 100) : 0) + '%';
+  }
+
+  function tick(t) {
+    if (!playing) return;
+    var dt = Math.min(0.1, (t - last) / 1000);
+    last = t;
+    pos += S.speed * dt;
+    if (pos >= maxPos) {
+      pos = maxPos;
+      render();
+      pause();
+      toast('Конец текста', 1500);
+      return;
+    }
+    render();
+    raf = requestAnimationFrame(tick);
+  }
+
+  function play() {
+    if (playing) return;
+    if (pos >= maxPos && maxPos > 0) pos = 0;
+    playing = true;
+    last = performance.now();
+    raf = requestAnimationFrame(tick);
+    playBtn.textContent = 'Пауза';
+    hideBarLater();
+    requestWake();
+  }
+  function pause() {
+    playing = false;
+    cancelAnimationFrame(raf);
+    playBtn.textContent = 'Старт';
+    showBar();
+  }
+  function togglePlay() { if (playing) pause(); else play(); }
+  function restart() { pos = 0; render(); toast('В начало'); }
+
+  function showBar() {
+    bar.classList.remove('hidden');
+    clearTimeout(barTimer);
+    if (playing) hideBarLater();
+  }
+  function hideBarLater() {
+    clearTimeout(barTimer);
+    barTimer = setTimeout(function () { if (playing) bar.classList.add('hidden'); }, 2500);
+  }
+
+  function setSpeed(v, silent) {
+    S.speed = clamp(Math.round(v), 5, 150);
+    speedShow.textContent = S.speed;
+    outs.speed.textContent = S.speed;
+    inputs.speed.value = S.speed;
+    toast('Скорость ' + S.speed);
+    if (!silent) saveSettings();
+  }
+  function setFont(v) {
+    S.font = clamp(Math.round(v / 2) * 2, 20, 120);
+    applySettings();
+    saveSettings();
+    toast('Шрифт ' + S.font);
+  }
+  function toggleMirror(key) {
+    S[key] = !S[key];
+    applySettings();
+    saveSettings();
+    toast(key === 'mirrorH' ? (S.mirrorH ? 'Зеркало ↔ вкл' : 'Зеркало ↔ выкл')
+                            : (S.mirrorV ? 'Зеркало ↕ вкл' : 'Зеркало ↕ выкл'));
+  }
+
+  /* ---------- Wake Lock ---------- */
+  var wakeLock = null, wakeToasted = false;
+  function requestWake() {
+    if (!('wakeLock' in navigator)) return;
+    if (wakeLock) return;
+    navigator.wakeLock.request('screen').then(function (lock) {
+      wakeLock = lock;
+      lock.addEventListener('release', function () { wakeLock = null; });
+      if (!wakeToasted) { wakeToasted = true; toast('Экран не погаснет', 1200); }
+    }).catch(function () {});
+  }
+  function releaseWake() {
+    if (wakeLock) { wakeLock.release().catch(function () {}); wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && mode === 'prompt') requestWake();
+  });
+
+  /* ---------- Mode switching ---------- */
+  function enterPrompter() {
+    mode = 'prompt';
+    document.documentElement.setAttribute('data-mode', 'prompt');
+    editor.hidden = true;
+    prompter.hidden = false;
+    track.textContent = text.trim() ? text : 'Текст пустой. Вернитесь назад и вставьте сценарий.';
+    pos = 0;
+    playing = false;
+    playBtn.textContent = 'Старт';
+    showBar();
+    applySettings();
+    requestAnimationFrame(function () { layout(); });
+    if (!('wakeLock' in navigator)) {
+      toast('Отключите автоблокировку в настройках iPhone', 2500);
+    } else {
+      requestWake();
+    }
+  }
+  function exitPrompter() {
+    pause();
+    releaseWake();
+    mode = 'edit';
+    document.documentElement.removeAttribute('data-mode');
+    prompter.hidden = true;
+    editor.hidden = false;
+  }
+
+  /* ---------- Editor events ---------- */
+  textarea.value = text;
+  updateWords();
+  textarea.addEventListener('input', function () {
+    text = textarea.value;
+    updateWords();
+    saveTextSoon();
+  });
+  $('startBtn').addEventListener('click', enterPrompter);
+  $('clearBtn').addEventListener('click', function () {
+    if (!text || confirm('Очистить текст?')) {
+      text = '';
+      textarea.value = '';
+      updateWords();
+      save(KEY_TEXT, '');
+    }
+  });
+  $('pasteBtn').addEventListener('click', function () {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      textarea.focus();
+      return;
+    }
+    navigator.clipboard.readText().then(function (t) {
+      if (!t) return;
+      text = text.trim() ? text.replace(/\s*$/, '') + '\n\n' + t : t;
+      textarea.value = text;
+      updateWords();
+      save(KEY_TEXT, text);
+    }).catch(function () { textarea.focus(); });
+  });
+
+  function bindRange(key, fmt) {
+    inputs[key].addEventListener('input', function () {
+      S[key] = Number(inputs[key].value);
+      outs[key].textContent = fmt ? fmt(S[key]) : S[key];
+      applySettings();
+      saveSettings();
+    });
+  }
+  bindRange('speed');
+  bindRange('font');
+  bindRange('margin', function (v) { return v + '%'; });
+  ['color', 'align'].forEach(function (key) {
+    inputs[key].addEventListener('change', function () {
+      S[key] = inputs[key].value;
+      applySettings();
+      saveSettings();
+    });
+  });
+  ['mirrorH', 'mirrorV', 'guide'].forEach(function (key) {
+    inputs[key].addEventListener('change', function () {
+      S[key] = inputs[key].checked;
+      applySettings();
+      saveSettings();
+    });
+  });
+
+  /* ---------- Prompter bar ---------- */
+  bar.addEventListener('pointerdown', function () { showBar(); });
+  $('exitBtn').addEventListener('click', exitPrompter);
+  $('restartBtn').addEventListener('click', restart);
+  playBtn.addEventListener('click', togglePlay);
+  $('fontDown').addEventListener('click', function () { setFont(S.font - 4); });
+  $('fontUp').addEventListener('click', function () { setFont(S.font + 4); });
+  $('speedDown').addEventListener('click', function () { setSpeed(S.speed - 5); });
+  $('speedUp').addEventListener('click', function () { setSpeed(S.speed + 5); });
+  mirHBtn.addEventListener('click', function () { toggleMirror('mirrorH'); });
+  mirVBtn.addEventListener('click', function () { toggleMirror('mirrorV'); });
+
+  /* ---------- Stage gestures ---------- */
+  var pd = null;
+  stage.addEventListener('pointerdown', function (e) {
+    pd = { y: e.clientY, t: performance.now(), moved: false, startPos: pos, startSpeed: S.speed };
+    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  stage.addEventListener('pointermove', function (e) {
+    if (!pd) return;
+    var dy = e.clientY - pd.y;
+    if (!pd.moved && Math.abs(dy) < 8) return;
+    pd.moved = true;
+    if (S.mirrorV) dy = -dy;
+    if (playing) {
+      setSpeed(pd.startSpeed - dy * 0.25, true);
+    } else {
+      pos = clamp(pd.startPos - dy, 0, maxPos);
+      render();
+    }
+  });
+  function endPointer() {
+    if (!pd) return;
+    if (!pd.moved && performance.now() - pd.t < 500) togglePlay();
+    if (pd.moved && playing) saveSettings();
+    pd = null;
+  }
+  stage.addEventListener('pointerup', endPointer);
+  stage.addEventListener('pointercancel', function () { pd = null; });
+
+  /* ---------- Keyboard / Bluetooth remotes ---------- */
+  document.addEventListener('keydown', function (e) {
+    if (mode !== 'prompt') return;
+    var k = e.key;
+    if (k === ' ' || k === 'Enter' || k === 'MediaPlayPause') { e.preventDefault(); togglePlay(); }
+    else if (k === 'ArrowUp') { e.preventDefault(); setSpeed(S.speed + 2); }
+    else if (k === 'ArrowDown') { e.preventDefault(); setSpeed(S.speed - 2); }
+    else if (k === 'ArrowRight') { e.preventDefault(); setFont(S.font + 2); }
+    else if (k === 'ArrowLeft') { e.preventDefault(); setFont(S.font - 2); }
+    else if (k === 'PageUp') { e.preventDefault(); pos = clamp(pos - stage.clientHeight * 0.5, 0, maxPos); render(); }
+    else if (k === 'PageDown') { e.preventDefault(); pos = clamp(pos + stage.clientHeight * 0.5, 0, maxPos); render(); }
+    else if (k === 'Home' || k === 'r' || k === 'R' || k === 'к' || k === 'К') { restart(); }
+    else if (k === 'm' || k === 'M' || k === 'ь' || k === 'Ь') { toggleMirror('mirrorH'); }
+    else if (k === 'v' || k === 'V' || k === 'м' || k === 'М') { toggleMirror('mirrorV'); }
+    else if (k === 'Escape') { exitPrompter(); }
+  });
+
+  window.addEventListener('resize', function () { if (mode === 'prompt') layout(); });
+  window.addEventListener('orientationchange', function () {
+    if (mode === 'prompt') setTimeout(layout, 150);
+  });
+
+  applySettings();
+})();
+</script>
+</body>
+</html>
