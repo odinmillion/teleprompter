@@ -11,6 +11,7 @@ The interface is in Russian.
 - Horizontal and vertical mirroring, independently or both at once
 - Scroll speed (5–150), font size (20–120), side margins, text colour, alignment, reading guide line
 - Text and settings persist in `localStorage` and survive a page reload
+- Optional 3-2-1 countdown after Start, shown as a large overlay that mirrors with the text, so you can step back into position; any tap cancels it
 - Wake Lock: the screen stays on while the prompter is open (Safari 16.4+)
 - On-screen control: tap — start/pause, swipe — speed while scrolling or scrub while paused; the button bar hides after 2.5 s
 - Keyboard and Bluetooth remotes: Space — start/pause, ↑↓ — speed, ←→ — font size, PageUp/PageDown — scrub half a screen, M — mirror ↔, V — mirror ↕, F — fullscreen, R/Home — back to start, Esc — exit

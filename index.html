@@ -262,6 +262,21 @@
     transition: opacity 0.2s;
   }
   .readout.show { opacity: 1; }
+  .countdown {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    color: #F0B43C;
+    font-size: 45vmin;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
   .bar {
     position: absolute;
     bottom: 0;
@@ -311,7 +326,7 @@
   .toast {
     position: absolute;
     left: 50%;
-    top: 50%;
+    top: 18%; /* не по центру: там цифры отсчёта */
     transform: translate(-50%, -50%);
     z-index: 3;
     background: rgba(255, 255, 255, 0.16);
@@ -402,6 +417,10 @@
       <span>Линия чтения</span>
       <input type="checkbox" switch id="guide">
     </label>
+    <label class="row">
+      <span>Отсчёт 3-2-1 перед стартом</span>
+      <input type="checkbox" switch id="countdown">
+    </label>
   </section>
 
   <p class="hint">
@@ -439,6 +458,7 @@
     <div id="guideLine" class="guide"></div>
     <div id="track" class="track"></div>
     <div id="readout" class="readout"></div>
+    <div id="cd" class="countdown" hidden></div>
   </div>
   <div id="toast" class="toast"></div>
   <div class="progress"><div id="progressFill"></div></div>
@@ -455,7 +475,7 @@
 
   var DEFAULTS = {
     speed: 40, font: 48, margin: 6, color: '#ffffff', align: 'left',
-    mirrorH: false, mirrorV: false, guide: true
+    mirrorH: false, mirrorV: false, guide: true, countdown: true
   };
 
   function load(key) {
@@ -477,11 +497,11 @@
 
   var editor = $('editor'), prompter = $('prompter'), stage = $('stage'), track = $('track');
   var guideLine = $('guideLine'), bar = $('bar'), toastEl = $('toast'), progressFill = $('progressFill');
-  var readout = $('readout');
+  var readout = $('readout'), cdEl = $('cd');
   var textarea = $('text'), wordsEl = $('words');
   var inputs = {
     speed: $('speed'), font: $('font'), margin: $('margin'), color: $('color'), align: $('align'),
-    mirrorH: $('mirrorH'), mirrorV: $('mirrorV'), guide: $('guide')
+    mirrorH: $('mirrorH'), mirrorV: $('mirrorV'), guide: $('guide'), countdown: $('countdown')
   };
   var outs = { speed: $('speedOut'), font: $('fontOut'), margin: $('marginOut') };
   var speedShow = $('speedShow'), playBtn = $('playBtn'), mirHBtn = $('mirHBtn'), mirVBtn = $('mirVBtn');
@@ -533,6 +553,7 @@
     inputs.mirrorH.checked = S.mirrorH;
     inputs.mirrorV.checked = S.mirrorV;
     inputs.guide.checked = S.guide;
+    inputs.countdown.checked = S.countdown;
   }
 
   function applySettings() {
@@ -585,10 +606,11 @@
     raf = requestAnimationFrame(tick);
   }
 
-  function play() {
+  function play(skipCountdown) {
     if (playing) return;
     stopFling();
-    if (pos >= maxPos && maxPos > 0) pos = 0;
+    if (pos >= maxPos && maxPos > 0) { pos = 0; render(); }
+    if (S.countdown && !skipCountdown) { startCountdown(); return; }
     playing = true;
     last = performance.now();
     raf = requestAnimationFrame(tick);
@@ -597,12 +619,37 @@
     requestWake();
   }
   function pause() {
+    cancelCountdown();
     playing = false;
     cancelAnimationFrame(raf);
     playBtn.textContent = 'Старт';
     showBar();
   }
-  function togglePlay() { if (playing) pause(); else play(); }
+  function togglePlay() { if (playing || cdTimer) pause(); else play(); }
+
+  /* ---------- Отсчёт 3-2-1: человек тапает и успевает вернуться к камере ---------- */
+  var cdTimer = 0, cdLeft = 0;
+  function startCountdown() {
+    cdLeft = 3;
+    cdEl.textContent = cdLeft;
+    cdEl.hidden = false;
+    playBtn.textContent = 'Отмена';
+    showBar();
+    cdTimer = setTimeout(cdTick, 1000);
+  }
+  function cdTick() {
+    cdLeft -= 1;
+    if (cdLeft > 0) { cdEl.textContent = cdLeft; cdTimer = setTimeout(cdTick, 1000); return; }
+    cdTimer = 0;
+    cdEl.hidden = true;
+    play(true);
+  }
+  function cancelCountdown() {
+    if (!cdTimer) return;
+    clearTimeout(cdTimer);
+    cdTimer = 0;
+    cdEl.hidden = true;
+  }
   function restart() { stopFling(); pos = 0; render(); toast('В начало'); }
 
   function showBar() {
@@ -768,7 +815,7 @@
       saveSettings();
     });
   });
-  ['mirrorH', 'mirrorV', 'guide'].forEach(function (key) {
+  ['mirrorH', 'mirrorV', 'guide', 'countdown'].forEach(function (key) {
     inputs[key].addEventListener('change', function () {
       S[key] = inputs[key].checked;
       applySettings();
@@ -823,8 +870,9 @@
 
   var pd = null;
   stage.addEventListener('pointerdown', function (e) {
-    var caught = fling !== 0; // палец поймал летящий текст — это не тап
+    var caught = fling !== 0 || cdTimer !== 0; // поймал летящий текст или прервал отсчёт — это не тап
     stopFling();
+    if (cdTimer) pause();
     pd = { y: e.clientY, t: performance.now(), moved: false, caught: caught,
            startPos: pos, startSpeed: S.speed, samples: [] };
     try { stage.setPointerCapture(e.pointerId); } catch (err) {}
