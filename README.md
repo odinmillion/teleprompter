@@ -13,8 +13,9 @@ The interface is in Russian.
 - Text and settings persist in `localStorage` and survive a page reload
 - Wake Lock: the screen stays on while the prompter is open (Safari 16.4+)
 - On-screen control: tap — start/pause, swipe — speed while scrolling or scrub while paused; the button bar hides after 2.5 s
-- Keyboard and Bluetooth remotes: Space — start/pause, ↑↓ — speed, ←→ — font size, PageUp/PageDown — scrub half a screen, M — mirror ↔, V — mirror ↕, R/Home — back to start, Esc — exit
-- "Add to Home Screen" in Safari gives a full-screen mode without the address bar (`manifest.webmanifest` and icons included)
+- Keyboard and Bluetooth remotes: Space — start/pause, ↑↓ — speed, ←→ — font size, PageUp/PageDown — scrub half a screen, M — mirror ↔, V — mirror ↕, F — fullscreen, R/Home — back to start, Esc — exit
+- Fullscreen button (⤢) on iPad, Android and desktop via the Fullscreen API; iPhone Safari has no Fullscreen API for page elements, so there the button shows a hint instead
+- "Add to Home Screen" in Safari gives a full-screen mode without the address bar on any iPhone (`manifest.webmanifest` and icons included)
 
 ## Deploy to GitHub Pages
 

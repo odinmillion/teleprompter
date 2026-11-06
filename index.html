@@ -406,8 +406,8 @@
 
   <p class="hint">
     На экране суфлера: <b>тап</b> — старт и пауза, <b>свайп вверх или вниз</b> — скорость во время движения и прокрутка на паузе.
-    Работают клавиатура и Bluetooth‑пульты: пробел — старт/пауза, стрелки — скорость и шрифт, M и V — зеркало, R — в начало.
-    Для полного экрана добавьте страницу на экран «Домой» в Safari. Текст и настройки сохраняются на этом устройстве.
+    Работают клавиатура и Bluetooth‑пульты: пробел — старт/пауза, стрелки — скорость и шрифт, M и V — зеркало, R — в начало, F — полный экран.
+    На iPhone для полного экрана добавьте страницу на экран «Домой» в Safari; на iPad и Android есть кнопка ⤢ в суфлере. Текст и настройки сохраняются на этом устройстве.
   </p>
 </main>
 
@@ -416,6 +416,7 @@
     <div class="rowbar">
       <button id="exitBtn" type="button" title="К тексту">←</button>
       <button id="restartBtn" type="button" title="В начало">⟲</button>
+      <button id="fsBtn" type="button" title="Полный экран">⤢</button>
       <button id="playBtn" class="play" type="button">Старт</button>
     </div>
     <div class="rowbar">
@@ -658,6 +659,36 @@
     if (document.visibilityState === 'visible' && mode === 'prompt') requestWake();
   });
 
+  /* ---------- Fullscreen: iPad, Android, десктоп. На iPhone API для элементов нет ---------- */
+  var fsBtn = $('fsBtn');
+  var fsRequest = prompter.requestFullscreen || prompter.webkitRequestFullscreen;
+  var fsExit = document.exitFullscreen || document.webkitExitFullscreen;
+  var fsAvailable = !!(fsRequest && (document.fullscreenEnabled || document.webkitFullscreenEnabled));
+  var standalone = navigator.standalone === true ||
+    (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  if (!fsAvailable && standalone) fsBtn.hidden = true; // ярлык на iPhone: адресной строки уже нет
+  function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function fsHint() {
+    toast(standalone ? 'Полный экран недоступен' : 'Для полного экрана добавьте страницу на экран «Домой»', 2500);
+  }
+  function exitFullscreen() {
+    var p = fsExit.call(document);
+    if (p && p.catch) p.catch(function () {});
+  }
+  function toggleFullscreen() {
+    if (!fsAvailable) { fsHint(); return; }
+    if (fsElement()) { exitFullscreen(); return; }
+    var p = fsRequest.call(prompter);
+    if (p && p.catch) p.catch(fsHint);
+  }
+  function syncFullscreen() {
+    fsBtn.classList.toggle('on', !!fsElement());
+    if (mode === 'prompt') requestAnimationFrame(layout);
+  }
+  fsBtn.addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  document.addEventListener('webkitfullscreenchange', syncFullscreen);
+
   /* ---------- Mode switching ---------- */
   function enterPrompter() {
     mode = 'prompt';
@@ -681,6 +712,7 @@
     pause();
     stopFling();
     releaseWake();
+    if (fsElement()) exitFullscreen();
     mode = 'edit';
     document.documentElement.removeAttribute('data-mode');
     prompter.hidden = true;
@@ -845,6 +877,7 @@
     else if (k === 'Home' || k === 'r' || k === 'R' || k === 'к' || k === 'К') { restart(); }
     else if (k === 'm' || k === 'M' || k === 'ь' || k === 'Ь') { toggleMirror('mirrorH'); }
     else if (k === 'v' || k === 'V' || k === 'м' || k === 'М') { toggleMirror('mirrorV'); }
+    else if (k === 'f' || k === 'F' || k === 'а' || k === 'А') { toggleFullscreen(); }
     else if (k === 'Escape') { exitPrompter(); }
   });
 
