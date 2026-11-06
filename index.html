@@ -121,7 +121,9 @@
     color: var(--fg);
     border: 1px solid var(--line);
     border-radius: 12px;
-    font: 17px/1.45 inherit;
+    font-family: inherit;
+    font-size: 17px; /* не меньше 16px — иначе iOS приближает при фокусе */
+    line-height: 1.45;
   }
   textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
   .textbar {
@@ -486,6 +488,7 @@
   var mode = 'edit';
   var pos = 0, maxPos = 0, playing = false, last = 0, raf = 0;
   var saveTimer = 0, toastTimer = 0, barTimer = 0;
+  var fling = 0, flingV = 0, flingLast = 0; /* инерция перемотки на паузе */
 
   function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
 
@@ -583,6 +586,7 @@
 
   function play() {
     if (playing) return;
+    stopFling();
     if (pos >= maxPos && maxPos > 0) pos = 0;
     playing = true;
     last = performance.now();
@@ -598,7 +602,7 @@
     showBar();
   }
   function togglePlay() { if (playing) pause(); else play(); }
-  function restart() { pos = 0; render(); toast('В начало'); }
+  function restart() { stopFling(); pos = 0; render(); toast('В начало'); }
 
   function showBar() {
     bar.classList.remove('hidden');
@@ -675,6 +679,7 @@
   }
   function exitPrompter() {
     pause();
+    stopFling();
     releaseWake();
     mode = 'edit';
     document.documentElement.removeAttribute('data-mode');
@@ -752,9 +757,44 @@
   mirVBtn.addEventListener('click', function () { toggleMirror('mirrorV'); });
 
   /* ---------- Stage gestures ---------- */
+  // Инерция после свайпа на паузе: скорость пальца за последние 100 мс,
+  // затухание как у UIScrollView (0,998 в мс), остановка у края или на малой скорости.
+  function flingVelocity(s) {
+    var now = performance.now();
+    if (s.length < 2 || now - s[s.length - 1].t > 80) return 0; // палец замер — инерции нет
+    var a = s[0], b = s[s.length - 1], dt = (b.t - a.t) / 1000;
+    if (dt <= 0) return 0;
+    var vy = (b.y - a.y) / dt;
+    if (S.mirrorV) vy = -vy;
+    return clamp(-vy, -8000, 8000);
+  }
+  function startFling(v) {
+    if (Math.abs(v) < 50) return;
+    flingV = v;
+    flingLast = performance.now();
+    fling = requestAnimationFrame(flingTick);
+  }
+  function flingTick(t) {
+    var dt = clamp((t - flingLast) / 1000, 0, 0.1);
+    flingLast = t;
+    pos += flingV * dt;
+    flingV *= Math.exp(-2 * dt);
+    var done = pos <= 0 || pos >= maxPos || Math.abs(flingV) < 30;
+    pos = clamp(pos, 0, maxPos);
+    render();
+    if (done) { fling = 0; flingV = 0; } else { fling = requestAnimationFrame(flingTick); }
+  }
+  function stopFling() {
+    if (fling) cancelAnimationFrame(fling);
+    fling = 0; flingV = 0;
+  }
+
   var pd = null;
   stage.addEventListener('pointerdown', function (e) {
-    pd = { y: e.clientY, t: performance.now(), moved: false, startPos: pos, startSpeed: S.speed };
+    var caught = fling !== 0; // палец поймал летящий текст — это не тап
+    stopFling();
+    pd = { y: e.clientY, t: performance.now(), moved: false, caught: caught,
+           startPos: pos, startSpeed: S.speed, samples: [] };
     try { stage.setPointerCapture(e.pointerId); } catch (err) {}
   });
   stage.addEventListener('pointermove', function (e) {
@@ -762,6 +802,9 @@
     var dy = e.clientY - pd.y;
     if (!pd.moved && Math.abs(dy) < 8) return;
     pd.moved = true;
+    var now = performance.now(), s = pd.samples;
+    s.push({ t: now, y: e.clientY });
+    while (s.length > 1 && now - s[0].t > 100) s.shift();
     if (S.mirrorV) dy = -dy;
     if (playing) {
       setSpeed(pd.startSpeed - dy * 0.25, true);
@@ -772,8 +815,9 @@
   });
   function endPointer() {
     if (!pd) return;
-    if (!pd.moved && performance.now() - pd.t < 500) togglePlay();
+    if (!pd.moved && !pd.caught && performance.now() - pd.t < 500) togglePlay();
     if (pd.moved && playing) saveSettings();
+    if (pd.moved && !playing) startFling(flingVelocity(pd.samples));
     pd = null;
   }
   stage.addEventListener('pointerup', endPointer);
@@ -796,8 +840,8 @@
     else if (k === 'ArrowDown') { e.preventDefault(); setSpeed(S.speed - 2); }
     else if (k === 'ArrowRight') { e.preventDefault(); setFont(S.font + 2); }
     else if (k === 'ArrowLeft') { e.preventDefault(); setFont(S.font - 2); }
-    else if (k === 'PageUp') { e.preventDefault(); pos = clamp(pos - stage.clientHeight * 0.5, 0, maxPos); render(); }
-    else if (k === 'PageDown') { e.preventDefault(); pos = clamp(pos + stage.clientHeight * 0.5, 0, maxPos); render(); }
+    else if (k === 'PageUp') { e.preventDefault(); stopFling(); pos = clamp(pos - stage.clientHeight * 0.5, 0, maxPos); render(); }
+    else if (k === 'PageDown') { e.preventDefault(); stopFling(); pos = clamp(pos + stage.clientHeight * 0.5, 0, maxPos); render(); }
     else if (k === 'Home' || k === 'r' || k === 'R' || k === 'к' || k === 'К') { restart(); }
     else if (k === 'm' || k === 'M' || k === 'ь' || k === 'Ь') { toggleMirror('mirrorH'); }
     else if (k === 'v' || k === 'V' || k === 'м' || k === 'М') { toggleMirror('mirrorV'); }
