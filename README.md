@@ -35,6 +35,8 @@ Plain text with a few typed marks. No rich-text editor on purpose: the text stay
 
 The word count ignores the marks. Markup can be turned off in settings, then the text is shown exactly as typed.
 
+On first launch the editor holds a demo script that uses every mark. Clear it and paste your own; the "Пример" (Example) button next to an empty field brings the demo back.
+
 ## Deploy to GitHub Pages
 
 The shortest path is the script (needs `gh`: `brew install gh && gh auth login`):

@@ -192,11 +192,17 @@
     line-height: 1.45;
   }
   .hint b { color: var(--fg); font-weight: 600; }
-  .help { color: var(--muted); font-size: 14px; line-height: 1.45; }
-  .help summary { cursor: pointer; color: var(--fg); font-weight: 600; font-size: 15px; }
-  .help .hint { margin: 8px 0; }
-  .help code { font: inherit; color: var(--fg); font-weight: 600; }
-  .help .ghost { padding-left: 0; }
+  .hint code { font: inherit; color: var(--fg); font-weight: 600; }
+  .secondary {
+    align-self: flex-start;
+    border: none;
+    border-radius: 10px;
+    background: var(--control);
+    color: var(--fg);
+    font-size: 16px;
+    font-weight: 600;
+    padding: 11px 20px;
+  }
 
   /* ---------- Prompter ---------- */
   .prompter {
@@ -382,6 +388,7 @@
   <div class="textbar">
     <span id="words" class="muted">0 слов</span>
     <span class="spacer"></span>
+    <button id="demoBtn" class="ghost" type="button" hidden>Пример</button>
     <button id="pasteBtn" class="ghost" type="button">Вставить из буфера</button>
     <button id="clearBtn" class="ghost" type="button">Очистить</button>
   </div>
@@ -439,25 +446,23 @@
     </label>
   </section>
 
-  <details class="help">
-    <summary>Разметка текста</summary>
-    <p class="hint">
-      <code>**важное**</code> — акцент, янтарным.
-      <code># Заголовок</code> — раздел; PageUp и PageDown прыгают по разделам.
-      <code>[ремарка]</code> — серым и мелко, вслух не читается.
-      <code>---</code> на отдельной строке — стоп-метка: прокрутка остановится до касания.
-      <code>ИМЯ:</code> заглавными в начале строки — реплика в диалоге.
-      <code>//</code> в начале строки — строка скрыта.
-      Разметку можно выключить в настройках.
-    </p>
-    <button id="promptBtn" class="ghost" type="button">Скопировать промпт для ИИ</button>
-  </details>
-
   <p class="hint">
     На экране суфлера: <b>тап</b> — старт и пауза, <b>свайп вверх или вниз</b> — скорость во время движения и прокрутка на паузе.
     Работают клавиатура и Bluetooth‑пульты: пробел — старт/пауза, стрелки — скорость и шрифт, PageUp/PageDown — перемотка или по разделам, M и V — зеркало, R — в начало, F — полный экран.
     На iPhone для полного экрана добавьте страницу на экран «Домой» в Safari; на iPad и Android есть кнопка ⤢ в суфлере. Текст и настройки сохраняются на этом устройстве.
   </p>
+
+  <p class="hint">
+    <b>Разметка текста</b><br>
+    <code>**важное**</code> — акцент, янтарным.<br>
+    <code># Заголовок</code> — раздел; PageUp и PageDown прыгают по разделам.<br>
+    <code>[ремарка]</code> — серым и мелко, вслух не читается.<br>
+    <code>---</code> на отдельной строке — стоп-метка: прокрутка остановится до касания.<br>
+    <code>ИМЯ:</code> заглавными в начале строки — реплика в диалоге.<br>
+    <code>//</code> в начале строки — строка скрыта.<br>
+    Разметку можно выключить в настройках.
+  </p>
+  <button id="promptBtn" class="secondary" type="button">Скопировать промпт для ИИ</button>
 </main>
 
 <div id="prompter" class="prompter" hidden>
@@ -523,12 +528,41 @@
       S[k] = (stored && typeof stored[k] === typeof DEFAULTS[k]) ? stored[k] : DEFAULTS[k];
     }
   })();
-  var text = load(KEY_TEXT) || '';
+  // Демонстрационный сценарий: показывает все знаки разметки. Подставляется только при
+  // первом запуске (ключа ещё нет); после «Очистить» поле остаётся пустым.
+  var DEMO = [
+    '// Это пример сценария с разметкой. Нажмите «Очистить» и вставьте свой текст.',
+    '# Вступление',
+    'Добрый вечер. Сегодня я покажу, как работает **наш новый суфлер**. [посмотреть в камеру]',
+    '',
+    'Он помещается в один файл, не требует сервера и открывается прямо с телефона. Самое важное: текст **читается через стекло**, а не с экрана.',
+    '',
+    '[пауза]',
+    '---',
+    '# Как это устроено',
+    'Телефон лежит в зеркальном ригеле под камерой. Текст отражается в стекле, а камера снимает сквозь него.',
+    '',
+    'Зеркало включается одной кнопкой: **по горизонтали**, **по вертикали** или сразу оба. Линия чтения показывает, где держать взгляд.',
+    '',
+    '// Строки с двумя косыми чертами в суфлере не показываются.',
+    '---',
+    '# Короткий диалог',
+    'ВЕДУЩИЙ: Сколько времени уходит на подготовку текста?',
+    'ГОСТЬ: Пара минут. Вставил, включил зеркало, положил телефон.',
+    'ВЕДУЩИЙ: А если текст длинный?',
+    'ГОСТЬ: Есть стоп-метки и прыжки по разделам. [улыбнуться]',
+    '',
+    '# Завершение',
+    'Спасибо, что досмотрели до конца. Если остались вопросы, **задавайте их в комментариях**. [кивнуть]',
+    'До встречи.'
+  ].join('\n');
+  var storedText = load(KEY_TEXT);
+  var text = storedText === null ? DEMO : storedText;
 
   var editor = $('editor'), prompter = $('prompter'), stage = $('stage'), track = $('track');
   var guideLine = $('guideLine'), bar = $('bar'), toastEl = $('toast'), progressFill = $('progressFill');
   var readout = $('readout'), cdEl = $('cd');
-  var textarea = $('text'), wordsEl = $('words');
+  var textarea = $('text'), wordsEl = $('words'), clearBtn = $('clearBtn'), demoBtn = $('demoBtn');
   var inputs = {
     speed: $('speed'), font: $('font'), margin: $('margin'), color: $('color'), align: $('align'),
     mirrorH: $('mirrorH'), mirrorV: $('mirrorV'), guide: $('guide'), countdown: $('countdown'),
@@ -555,6 +589,8 @@
     var t = plainText(text);
     var n = t.trim() ? t.trim().split(/\s+/).length : 0;
     wordsEl.textContent = n + ' ' + plural(n, 'слово', 'слова', 'слов');
+    clearBtn.hidden = !text;  // пустому полю нечего чистить — вместо этого предлагаем пример
+    demoBtn.hidden = !!text;
   }
 
   function saveSettings() { save(KEY_SETTINGS, JSON.stringify(S)); }
@@ -890,7 +926,13 @@
     saveTextSoon();
   });
   $('startBtn').addEventListener('click', enterPrompter);
-  $('clearBtn').addEventListener('click', function () {
+  demoBtn.addEventListener('click', function () {
+    text = DEMO;
+    textarea.value = text;
+    updateWords();
+    save(KEY_TEXT, text);
+  });
+  clearBtn.addEventListener('click', function () {
     if (!text || confirm('Очистить текст?')) {
       text = '';
       textarea.value = '';
