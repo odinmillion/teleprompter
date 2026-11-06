@@ -1,52 +1,56 @@
-# Суфлер
+# Teleprompter
 
-Телесуфлер для iPhone под зеркальное стекло. Один HTML-файл, без сборки, без зависимостей, без сервера — хостится на GitHub Pages.
+A teleprompter for iPhone that sits behind a beam-splitter mirror. One HTML file, no build step, no dependencies, no server — hosted on GitHub Pages.
 
-## Что умеет
+Live: https://odinmillion.github.io/teleprompter/
 
-- Зеркало по горизонтали и по вертикали, независимо и одновременно
-- Скорость прокрутки (5–150), размер шрифта (20–120), поля по бокам, цвет текста, выравнивание, линия чтения
-- Текст и настройки сохраняются в `localStorage` — переживают перезагрузку страницы
-- Wake Lock: пока суфлер открыт, экран не гаснет (Safari 16.4+)
-- Управление с экрана: тап — старт/пауза, свайп — скорость (во время движения) или прокрутка (на паузе), панель кнопок прячется через 2,5 с
-- Управление с клавиатуры и Bluetooth-пультов: пробел — старт/пауза, ↑↓ — скорость, ←→ — шрифт, PageUp/PageDown — перемотка, M — зеркало ↔, V — зеркало ↕, R/Home — в начало, Esc — выход
-- «На экран Домой» в Safari даёт полноэкранный режим без адресной строки (есть `manifest.webmanifest` и иконки)
+The interface is in Russian.
 
-## Деплой на GitHub Pages
+## Features
 
-Самый короткий путь — скрипт (нужен `gh`, см. `brew install gh && gh auth login`):
+- Horizontal and vertical mirroring, independently or both at once
+- Scroll speed (5–150), font size (20–120), side margins, text colour, alignment, reading guide line
+- Text and settings persist in `localStorage` and survive a page reload
+- Wake Lock: the screen stays on while the prompter is open (Safari 16.4+)
+- On-screen control: tap — start/pause, swipe — speed while scrolling or scrub while paused; the button bar hides after 2.5 s
+- Keyboard and Bluetooth remotes: Space — start/pause, ↑↓ — speed, ←→ — font size, PageUp/PageDown — scrub half a screen, M — mirror ↔, V — mirror ↕, R/Home — back to start, Esc — exit
+- "Add to Home Screen" in Safari gives a full-screen mode without the address bar (`manifest.webmanifest` and icons included)
+
+## Deploy to GitHub Pages
+
+The shortest path is the script (needs `gh`: `brew install gh && gh auth login`):
 
 ```bash
-./deploy.sh            # создаст репозиторий «teleprompter» и включит Pages
-./deploy.sh my-prompter   # другое имя репозитория
+./deploy.sh               # creates a "teleprompter" repository and enables Pages
+./deploy.sh my-prompter   # a different repository name
 ```
 
-Вручную:
+Manually:
 
 ```bash
 git init -b main
 git add .
-git commit -m "Телесуфлер: первая версия"
+git commit -m "Teleprompter: first version"
 gh repo create teleprompter --public --source=. --remote=origin --push
 ```
 
-Затем в репозитории: Settings → Pages → Source: «Deploy from a branch», Branch: `main`, папка `/ (root)`. Через минуту страница откроется по адресу `https://<логин>.github.io/teleprompter/`.
+Then in the repository: Settings → Pages → Source: "Deploy from a branch", Branch: `main`, folder `/ (root)`. A minute later the page is up at `https://<login>.github.io/teleprompter/`.
 
-Обновления: `git commit` + `git push` — Pages пересобирается сам.
+Updates: `git commit` + `git push` — Pages rebuilds on its own.
 
-## Файлы
+## Files
 
-| Файл | Назначение |
+| File | Purpose |
 |---|---|
-| `index.html` | Всё приложение: разметка, стили, скрипт |
-| `manifest.webmanifest`, `icon-*.png`, `apple-touch-icon.png` | Иконка и полноэкранный режим при добавлении на экран «Домой» |
-| `.nojekyll` | Отключает Jekyll на GitHub Pages |
-| `deploy.sh` | Создание репозитория и включение Pages через `gh` |
-| `CLAUDE.md` | Контекст для Claude Code: архитектура и ограничения |
+| `index.html` | The whole app: markup, styles, script |
+| `manifest.webmanifest`, `icon-*.png`, `apple-touch-icon.png` | Icon and full-screen mode when added to the Home Screen |
+| `.nojekyll` | Disables Jekyll on GitHub Pages |
+| `deploy.sh` | Creates the repository and enables Pages via `gh` |
+| `CLAUDE.md` | Context for Claude Code: architecture and constraints |
 
-## Проверка на iPhone
+## Testing on an iPhone
 
-1. Открыть страницу в Safari, вставить текст, нажать «Начать».
-2. Должно появиться «Экран не погаснет» — Wake Lock сработал. Если нет — Настройки → Экран и яркость → Автоблокировка → Никогда.
-3. Включить нужное зеркало, положить телефон в суфлер, тапнуть по тексту.
-4. Если используется «Гид-доступ»: Настройки → Универсальный доступ → Гид-доступ → Автоблокировка экрана → Никогда, иначе он перебивает Wake Lock.
+1. Open the page in Safari, paste some text, tap «Начать» (Start).
+2. You should see «Экран не погаснет» ("the screen will stay on") — Wake Lock is working. If not: Settings → Display & Brightness → Auto-Lock → Never.
+3. Turn on the mirror you need, put the phone into the prompter, tap the text.
+4. If you use Guided Access: Settings → Accessibility → Guided Access → Display Auto-Lock → Never, otherwise it overrides Wake Lock.
