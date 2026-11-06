@@ -262,14 +262,15 @@
   .readout.show { opacity: 1; }
   .bar {
     position: absolute;
-    top: 0;
+    bottom: 0;
     left: 0;
     right: 0;
     z-index: 2;
     display: flex;
-    flex-direction: column;
+    flex-direction: column-reverse; /* основной ряд (← ⟲ Старт) — ближе к большому пальцу */
     gap: 6px;
-    padding: calc(8px + env(safe-area-inset-top, 0px)) calc(10px + env(safe-area-inset-right, 0px)) 8px calc(10px + env(safe-area-inset-left, 0px));
+    /* снизу: 8px + 3px прогресс-бара + индикатор «Домой» */
+    padding: 8px calc(10px + env(safe-area-inset-right, 0px)) calc(11px + env(safe-area-inset-bottom, 0px)) calc(10px + env(safe-area-inset-left, 0px));
     background: rgba(0, 0, 0, 0.78);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
@@ -328,7 +329,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 2;
+    z-index: 3; /* поверх панели: линия видна и когда панель показана */
     height: calc(3px + env(safe-area-inset-bottom, 0px));
     background: rgba(255, 255, 255, 0.08);
   }
