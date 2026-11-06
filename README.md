@@ -14,9 +14,26 @@ The interface is in Russian.
 - Optional 3-2-1 countdown after Start, shown as a large overlay that mirrors with the text, so you can step back into position; any tap cancels it
 - Wake Lock: the screen stays on while the prompter is open (Safari 16.4+)
 - On-screen control: tap — start/pause, swipe — speed while scrolling or scrub while paused; the button bar hides after 2.5 s
-- Keyboard and Bluetooth remotes: Space — start/pause, ↑↓ — speed, ←→ — font size, PageUp/PageDown — scrub half a screen, M — mirror ↔, V — mirror ↕, F — fullscreen, R/Home — back to start, Esc — exit
+- Lightweight text markup: `**emphasis**`, `# section`, `[stage direction]`, `---` stop marker that pauses scrolling until a tap, `NAME:` speaker labels, `//` hidden lines (see below); can be switched off in settings
+- "Copy prompt for AI" button: puts a ready-made prompt with the markup rules on the clipboard, so ChatGPT, Claude or any other assistant can prepare a script in the right format
+- Keyboard and Bluetooth remotes: Space — start/pause, ↑↓ — speed, ←→ — font size, PageUp/PageDown — scrub half a screen, or jump between `#` sections when the script has them, M — mirror ↔, V — mirror ↕, F — fullscreen, R/Home — back to start, Esc — exit
 - Fullscreen button (⤢) on iPad, Android and desktop via the Fullscreen API; iPhone Safari has no Fullscreen API for page elements, so there the button shows a hint instead
 - "Add to Home Screen" in Safari gives a full-screen mode without the address bar on any iPhone (`manifest.webmanifest` and icons included)
+
+## Text markup
+
+Plain text with a few typed marks. No rich-text editor on purpose: the text stays portable and the iPhone keyboard stays simple.
+
+| Mark | Effect |
+|---|---|
+| `**word or phrase**` | Emphasis: amber, heavier |
+| `# Heading` | Section heading, amber. PageUp/PageDown jump between sections |
+| `[stage direction]` | Grey and small, not meant to be read aloud |
+| `---` on its own line | Stop marker: a dashed line, scrolling pauses there until you tap |
+| `NAME:` in capitals at line start | Speaker label in dialogues and interviews |
+| `//` at line start | Hidden line, notes to yourself |
+
+The word count ignores the marks. Markup can be turned off in settings, then the text is shown exactly as typed.
 
 ## Deploy to GitHub Pages
 

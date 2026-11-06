@@ -192,6 +192,11 @@
     line-height: 1.45;
   }
   .hint b { color: var(--fg); font-weight: 600; }
+  .help { color: var(--muted); font-size: 14px; line-height: 1.45; }
+  .help summary { cursor: pointer; color: var(--fg); font-weight: 600; font-size: 15px; }
+  .help .hint { margin: 8px 0; }
+  .help code { font: inherit; color: var(--fg); font-weight: 600; }
+  .help .ghost { padding-left: 0; }
 
   /* ---------- Prompter ---------- */
   .prompter {
@@ -227,6 +232,13 @@
     letter-spacing: 0.005em;
     will-change: transform;
   }
+  /* разметка текста */
+  .h { color: #F0B43C; margin-top: 0.6em; }
+  .h:first-child { margin-top: 0; }
+  .em { color: #F0B43C; font-weight: 800; }
+  .note { color: #8E949C; font-size: 0.7em; font-weight: 500; }
+  .who { color: #F0B43C; margin-right: 0.3em; }
+  .stop { height: 0; margin: 0.45em 0; border-top: 2px dashed rgba(255, 255, 255, 0.35); }
   .guide {
     position: absolute;
     left: 0;
@@ -421,11 +433,29 @@
       <span>Отсчёт 3-2-1 перед стартом</span>
       <input type="checkbox" switch id="countdown">
     </label>
+    <label class="row">
+      <span>Разметка текста</span>
+      <input type="checkbox" switch id="markup">
+    </label>
   </section>
+
+  <details class="help">
+    <summary>Разметка текста</summary>
+    <p class="hint">
+      <code>**важное**</code> — акцент, янтарным.
+      <code># Заголовок</code> — раздел; PageUp и PageDown прыгают по разделам.
+      <code>[ремарка]</code> — серым и мелко, вслух не читается.
+      <code>---</code> на отдельной строке — стоп-метка: прокрутка остановится до касания.
+      <code>ИМЯ:</code> заглавными в начале строки — реплика в диалоге.
+      <code>//</code> в начале строки — строка скрыта.
+      Разметку можно выключить в настройках.
+    </p>
+    <button id="promptBtn" class="ghost" type="button">Скопировать промпт для ИИ</button>
+  </details>
 
   <p class="hint">
     На экране суфлера: <b>тап</b> — старт и пауза, <b>свайп вверх или вниз</b> — скорость во время движения и прокрутка на паузе.
-    Работают клавиатура и Bluetooth‑пульты: пробел — старт/пауза, стрелки — скорость и шрифт, M и V — зеркало, R — в начало, F — полный экран.
+    Работают клавиатура и Bluetooth‑пульты: пробел — старт/пауза, стрелки — скорость и шрифт, PageUp/PageDown — перемотка или по разделам, M и V — зеркало, R — в начало, F — полный экран.
     На iPhone для полного экрана добавьте страницу на экран «Домой» в Safari; на iPad и Android есть кнопка ⤢ в суфлере. Текст и настройки сохраняются на этом устройстве.
   </p>
 </main>
@@ -475,7 +505,7 @@
 
   var DEFAULTS = {
     speed: 40, font: 48, margin: 6, color: '#ffffff', align: 'left',
-    mirrorH: false, mirrorV: false, guide: true, countdown: true
+    mirrorH: false, mirrorV: false, guide: true, countdown: true, markup: true
   };
 
   function load(key) {
@@ -501,7 +531,8 @@
   var textarea = $('text'), wordsEl = $('words');
   var inputs = {
     speed: $('speed'), font: $('font'), margin: $('margin'), color: $('color'), align: $('align'),
-    mirrorH: $('mirrorH'), mirrorV: $('mirrorV'), guide: $('guide'), countdown: $('countdown')
+    mirrorH: $('mirrorH'), mirrorV: $('mirrorV'), guide: $('guide'), countdown: $('countdown'),
+    markup: $('markup')
   };
   var outs = { speed: $('speedOut'), font: $('fontOut'), margin: $('marginOut') };
   var speedShow = $('speedShow'), playBtn = $('playBtn'), mirHBtn = $('mirHBtn'), mirVBtn = $('mirVBtn');
@@ -510,6 +541,7 @@
   var pos = 0, maxPos = 0, playing = false, last = 0, raf = 0;
   var saveTimer = 0, toastTimer = 0, barTimer = 0;
   var fling = 0, flingV = 0, flingLast = 0; /* инерция перемотки на паузе */
+  var stops = [], heads = []; /* позиции стоп-меток и заголовков в единицах pos, см. layout() */
 
   function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
 
@@ -520,7 +552,8 @@
     return many;
   }
   function updateWords() {
-    var n = text.trim() ? text.trim().split(/\s+/).length : 0;
+    var t = plainText(text);
+    var n = t.trim() ? t.trim().split(/\s+/).length : 0;
     wordsEl.textContent = n + ' ' + plural(n, 'слово', 'слова', 'слов');
   }
 
@@ -554,6 +587,7 @@
     inputs.mirrorV.checked = S.mirrorV;
     inputs.guide.checked = S.guide;
     inputs.countdown.checked = S.countdown;
+    inputs.markup.checked = S.markup;
   }
 
   function applySettings() {
@@ -570,6 +604,7 @@
     mirVBtn.classList.toggle('on', S.mirrorV);
     speedShow.textContent = S.speed;
     syncInputs();
+    updateWords();
     if (mode === 'prompt') layout();
   }
 
@@ -580,6 +615,14 @@
     track.style.paddingBottom = (h - guideY) + 'px';
     guideLine.style.top = guideY + 'px';
     readout.style.top = (guideY - 8) + 'px';
+    // Элемент доезжает до линии чтения при pos = offsetTop − guideY (offsetTop считается от верха трека, включая padding-top = guideY)
+    stops = []; heads = [];
+    if (S.markup) {
+      var marks = track.querySelectorAll('.stop, .h');
+      for (var i = 0; i < marks.length; i++) {
+        (marks[i].classList.contains('stop') ? stops : heads).push(marks[i].offsetTop - guideY);
+      }
+    }
     maxPos = Math.max(0, track.offsetHeight - h);
     pos = clamp(pos, 0, maxPos);
     render();
@@ -594,7 +637,16 @@
     if (!playing) return;
     var dt = Math.min(0.1, (t - last) / 1000);
     last = t;
-    pos += S.speed * dt;
+    var next = pos + S.speed * dt;
+    var stop = nextMark(stops, pos);
+    if (stop !== null && next >= stop) {
+      pos = stop;
+      render();
+      pause();
+      toast('Стоп-метка', 1500);
+      return;
+    }
+    pos = next;
     if (pos >= maxPos) {
       pos = maxPos;
       render();
@@ -706,6 +758,69 @@
     if (document.visibilityState === 'visible' && mode === 'prompt') requestWake();
   });
 
+  /* ---------- Разметка: **акцент**, # раздел, [ремарка], --- стоп, ИМЯ: реплика, // скрыто ---------- */
+  var RE_INLINE = /(\*\*[^*\n]+\*\*|\[[^\]\n]+\])/g;
+  var RE_WHO = /^([А-ЯЁA-Z][А-ЯЁA-Z0-9 .\-]{0,30}):(?=\s|$)/;
+  var RE_STOP = /^---+\s*$/;
+  function renderText() {
+    if (!S.markup) { track.textContent = text; return; }
+    var frag = document.createDocumentFragment();
+    text.split('\n').forEach(function (raw) {
+      if (raw.slice(0, 2) === '//') return;
+      var ln = document.createElement('div');
+      ln.className = 'ln';
+      if (RE_STOP.test(raw)) { ln.className = 'ln stop'; frag.appendChild(ln); return; }
+      var line = raw;
+      if (line.slice(0, 2) === '# ') { ln.className = 'ln h'; line = line.slice(2); }
+      var m = RE_WHO.exec(line);
+      if (m) {
+        var who = document.createElement('span');
+        who.className = 'who';
+        who.textContent = m[1] + ':';
+        ln.appendChild(who);
+        line = line.slice(m[0].length).replace(/^\s+/, ''); // пробел после двоеточия даёт margin-right
+      }
+      renderInline(ln, line);
+      frag.appendChild(ln);
+    });
+    track.textContent = '';
+    track.appendChild(frag);
+  }
+  function renderInline(parent, s) {
+    var last = 0, m;
+    RE_INLINE.lastIndex = 0;
+    while ((m = RE_INLINE.exec(s))) {
+      if (m.index > last) parent.appendChild(document.createTextNode(s.slice(last, m.index)));
+      var el = document.createElement('span');
+      if (m[0].charAt(0) === '*') { el.className = 'em'; el.textContent = m[0].slice(2, -2); }
+      else { el.className = 'note'; el.textContent = m[0].slice(1, -1); }
+      parent.appendChild(el);
+      last = m.index + m[0].length;
+    }
+    if (last < s.length) parent.appendChild(document.createTextNode(s.slice(last)));
+    if (!parent.childNodes.length) parent.appendChild(document.createElement('br')); // пустая строка — не схлопывается
+  }
+  // Текст без служебных знаков — для счётчика слов
+  function plainText(t) {
+    if (!S.markup) return t;
+    return t.split('\n')
+      .filter(function (l) { return l.slice(0, 2) !== '//' && !RE_STOP.test(l); })
+      .join('\n')
+      .replace(/\[[^\]\n]+\]/g, '').replace(/\*\*/g, '').replace(/^# /gm, '');
+  }
+  // Ближайшая метка строго после p. Без запаса: после остановки pos равен метке
+  // точно, так что повторно она не сработает, а запас в пиксель давал кадру
+  // шанс попасть в это окно перед меткой и проскочить её.
+  function nextMark(list, p) {
+    for (var i = 0; i < list.length; i++) if (list[i] > p) return list[i];
+    return null;
+  }
+  function prevMark(list, p) {
+    var r = null;
+    for (var i = 0; i < list.length; i++) if (list[i] < p - 1) r = list[i];
+    return r;
+  }
+
   /* ---------- Fullscreen: iPad, Android, десктоп. На iPhone API для элементов нет ---------- */
   var fsBtn = $('fsBtn');
   var fsRequest = prompter.requestFullscreen || prompter.webkitRequestFullscreen;
@@ -742,7 +857,7 @@
     document.documentElement.setAttribute('data-mode', 'prompt');
     editor.hidden = true;
     prompter.hidden = false;
-    track.textContent = text.trim() ? text : 'Текст пустой. Вернитесь назад и вставьте сценарий.';
+    if (text.trim()) renderText(); else track.textContent = 'Текст пустой. Вернитесь назад и вставьте сценарий.';
     pos = 0;
     playing = false;
     playBtn.textContent = 'Старт';
@@ -796,6 +911,31 @@
       save(KEY_TEXT, text);
     }).catch(function () { textarea.focus(); });
   });
+  var PROMPT = [
+    'Подготовь текст для телесуфлера по правилам ниже. Выведи только готовый текст, без пояснений и без Markdown-оформления, кроме перечисленной разметки.',
+    '',
+    'Разметка суфлера:',
+    '- **слово или фраза** — акцент, выделить голосом. Не больше одного-двух на абзац.',
+    '- # Заголовок — начало раздела, строка начинается с «# ». Во время чтения по разделам можно перепрыгивать.',
+    '- [ремарка] — указание ведущему, вслух не читается: [пауза], [показать слайд], [посмотреть в камеру].',
+    '- --- — стоп-метка на отдельной строке. Прокрутка остановится здесь, пока ведущий не коснётся экрана. Ставь там, где нужно дождаться ответа, реакции зала или демонстрации.',
+    '- ИМЯ: — в начале строки заглавными, реплика говорящего в диалоге или интервью.',
+    '- // — в начале строки: служебная заметка автору, в суфлере не показывается.',
+    '',
+    'Как писать:',
+    '- Короткие предложения, разговорный ритм: это речь, а не статья.',
+    '- Абзацы по два-четыре предложения, между абзацами пустая строка.',
+    '- Числа, даты, сокращения и иностранные названия записывай так, как их произносят.',
+    '- Никакого другого оформления: без списков, таблиц, курсива, нумерации и других символов разметки.',
+    '',
+    'Тема или исходный текст:'
+  ].join('\n');
+  $('promptBtn').addEventListener('click', function () {
+    var btn = this, label = btn.textContent;
+    function say(msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = label; }, 1500); }
+    if (!navigator.clipboard || !navigator.clipboard.writeText) { say('Буфер недоступен'); return; }
+    navigator.clipboard.writeText(PROMPT).then(function () { say('Скопировано'); }, function () { say('Не удалось скопировать'); });
+  });
 
   function bindRange(key, fmt) {
     inputs[key].addEventListener('input', function () {
@@ -815,7 +955,7 @@
       saveSettings();
     });
   });
-  ['mirrorH', 'mirrorV', 'guide', 'countdown'].forEach(function (key) {
+  ['mirrorH', 'mirrorV', 'guide', 'countdown', 'markup'].forEach(function (key) {
     inputs[key].addEventListener('change', function () {
       S[key] = inputs[key].checked;
       applySettings();
@@ -920,8 +1060,16 @@
     else if (k === 'ArrowDown') { e.preventDefault(); setSpeed(S.speed - 2); }
     else if (k === 'ArrowRight') { e.preventDefault(); setFont(S.font + 2); }
     else if (k === 'ArrowLeft') { e.preventDefault(); setFont(S.font - 2); }
-    else if (k === 'PageUp') { e.preventDefault(); stopFling(); pos = clamp(pos - stage.clientHeight * 0.5, 0, maxPos); render(); }
-    else if (k === 'PageDown') { e.preventDefault(); stopFling(); pos = clamp(pos + stage.clientHeight * 0.5, 0, maxPos); render(); }
+    else if (k === 'PageUp') {
+      e.preventDefault(); stopFling();
+      var pv = heads.length ? prevMark(heads, pos) : null;
+      pos = clamp(heads.length ? (pv === null ? 0 : pv) : pos - stage.clientHeight * 0.5, 0, maxPos); render();
+    }
+    else if (k === 'PageDown') {
+      e.preventDefault(); stopFling();
+      var nx = heads.length ? nextMark(heads, pos) : null;
+      pos = clamp(heads.length ? (nx === null ? maxPos : nx) : pos + stage.clientHeight * 0.5, 0, maxPos); render();
+    }
     else if (k === 'Home' || k === 'r' || k === 'R' || k === 'к' || k === 'К') { restart(); }
     else if (k === 'm' || k === 'M' || k === 'ь' || k === 'Ь') { toggleMirror('mirrorH'); }
     else if (k === 'v' || k === 'V' || k === 'м' || k === 'М') { toggleMirror('mirrorV'); }
