@@ -15,8 +15,10 @@ The interface is in Russian.
 - Wake Lock: the screen stays on while the prompter is open (Safari 16.4+)
 - On-screen control: tap — start/pause, swipe — speed while scrolling or scrub while paused; the button bar hides after 2.5 s
 - Lightweight text markup: `**emphasis**`, `# section`, `[stage direction]`, `---` stop marker that pauses scrolling until a tap, `NAME:` speaker labels, `//` hidden lines (see below); can be switched off in settings
+- Per-fragment pacing: `{+bigger}` / `{-smaller}` size marks and blank lines slow down or speed up parts of the script at a constant scroll speed
+- In-place editing on pause: the ✎ button turns the prompter text into an editor at the current reading position — add line breaks, or select a fragment and change its size with A− / A+, then "Готово" (Done) returns to the same spot
 - "Copy prompt for AI" button: puts a ready-made prompt with the markup rules on the clipboard, so ChatGPT, Claude or any other assistant can prepare a script in the right format
-- Keyboard and Bluetooth remotes: Space — start/pause, ↑↓ — speed, ←→ — font size, PageUp/PageDown — scrub half a screen, or jump between `#` sections when the script has them, M — mirror ↔, V — mirror ↕, F — fullscreen, R/Home — back to start, Esc — exit
+- Keyboard and Bluetooth remotes: Space — start/pause, ↑↓ — speed, ←→ — font size, PageUp/PageDown — scrub half a screen, or jump between `#` sections when the script has them, M — mirror ↔, V — mirror ↕, F — fullscreen, E — edit in place, R/Home — back to start, Esc — exit
 - Fullscreen button (⤢) on iPad, Android and desktop via the Fullscreen API; iPhone Safari has no Fullscreen API for page elements, so there the button shows a hint instead
 - "Add to Home Screen" in Safari gives a full-screen mode without the address bar on any iPhone (`manifest.webmanifest` and icons included)
 
@@ -32,6 +34,11 @@ Plain text with a few typed marks. No rich-text editor on purpose: the text stay
 | `---` on its own line | Stop marker: a dashed line, scrolling pauses there until you tap |
 | `NAME:` in capitals at line start | Speaker label in dialogues and interviews |
 | `//` at line start | Hidden line, notes to yourself |
+| `{+phrase}`, `{++phrase}` | Bigger text (125 %, 150 %): fewer words per screen, so it is read slower |
+| `{-phrase}`, `{--phrase}` | Smaller text (80 %, 65 %): read faster |
+| blank lines | A pause: one blank line is one line height of scrolling |
+
+Size marks never nest and do not cross a line break. The in-place editor (✎) writes them for you: sizes are stored per character, so overlapping selections simply add up, e.g. enlarging "one two" and then "two three" gives `{+one }{++two}{+ three}`. While editing, sizes are shown as they will look and the other marks are shown literally.
 
 The word count ignores the marks. Markup can be turned off in settings, then the text is shown exactly as typed.
 

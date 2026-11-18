@@ -245,6 +245,35 @@
   .note { color: #8E949C; font-size: 0.7em; font-weight: 500; }
   .who { color: #F0B43C; margin-right: 0.3em; }
   .stop { height: 0; margin: 0.45em 0; border-top: 2px dashed rgba(255, 255, 255, 0.35); }
+  /* размер фрагмента: {--…} {-…} {+…} {++…} */
+  .sz.s2 { font-size: 0.65em; }
+  .sz.s1 { font-size: 0.8em; }
+  .sz.b1 { font-size: 1.25em; }
+  .sz.b2 { font-size: 1.5em; }
+  /* правка на паузе: сцена становится обычной прокручиваемой областью с выделением */
+  .stage.editing {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-touch-callout: default;
+    cursor: text;
+  }
+  .stage.editing .track {
+    position: relative;
+    outline: none;
+    caret-color: #F0B43C;
+    will-change: auto;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  .stage.editing .guide, .stage.editing .readout { display: none; }
+  .prompter.editing #bar, .prompter.editing .progress { display: none; }
+  .editbar { z-index: 4; }
+  .editbar.kb { padding-bottom: 8px; } /* над клавиатурой индикатора «Домой» нет */
+  .editbar output { min-width: 52px; }
   .guide {
     position: absolute;
     left: 0;
@@ -448,7 +477,7 @@
 
   <p class="hint">
     На экране суфлера: <b>тап</b> — старт и пауза, <b>свайп вверх или вниз</b> — скорость во время движения и прокрутка на паузе.
-    Работают клавиатура и Bluetooth‑пульты: пробел — старт/пауза, стрелки — скорость и шрифт, PageUp/PageDown — перемотка или по разделам, M и V — зеркало, R — в начало, F — полный экран.
+    Работают клавиатура и Bluetooth‑пульты: пробел — старт/пауза, стрелки — скорость и шрифт, PageUp/PageDown — перемотка или по разделам, M и V — зеркало, R — в начало, F — полный экран, E — правка.
     На iPhone для полного экрана добавьте страницу на экран «Домой» в Safari; на iPad и Android есть кнопка ⤢ в суфлере. Текст и настройки сохраняются на этом устройстве.
   </p>
 
@@ -460,6 +489,9 @@
     <code>---</code> на отдельной строке — стоп-метка: прокрутка остановится до касания.<br>
     <code>ИМЯ:</code> заглавными в начале строки — реплика в диалоге.<br>
     <code>//</code> в начале строки — строка скрыта.<br>
+    <code>{+крупнее}</code>, <code>{++ещё крупнее}</code>, <code>{-мельче}</code>, <code>{--ещё мельче}</code> — размер фрагмента: крупный текст читается медленнее, мелкий быстрее.<br>
+    Пустые строки дают паузу: чем их больше, тем она длиннее.<br>
+    Кнопка ✎ в суфлере открывает правку на месте: добавьте переносов или выделите фрагмент и поменяйте размер кнопками A− и A+, затем «Готово».<br>
     Разметку можно выключить в настройках.
   </p>
   <button id="promptBtn" class="secondary" type="button">Скопировать промпт для ИИ</button>
@@ -471,6 +503,7 @@
       <button id="exitBtn" type="button" title="К тексту">←</button>
       <button id="restartBtn" type="button" title="В начало">⟲</button>
       <button id="fsBtn" type="button" title="Полный экран">⤢</button>
+      <button id="editBtn" type="button" title="Править текст">✎</button>
       <button id="playBtn" class="play" type="button">Старт</button>
     </div>
     <div class="rowbar">
@@ -494,6 +527,17 @@
     <div id="track" class="track"></div>
     <div id="readout" class="readout"></div>
     <div id="cd" class="countdown" hidden></div>
+  </div>
+  <div id="editBar" class="bar editbar" hidden>
+    <div class="rowbar">
+      <button id="editCancel" type="button" title="Отменить правки">✕</button>
+      <span id="sizeGroup" class="group">
+        <button id="sizeDown" type="button" title="Выделенное мельче">A−</button>
+        <output id="sizeShow">100%</output>
+        <button id="sizeUp" type="button" title="Выделенное крупнее">A+</button>
+      </span>
+      <button id="editDone" class="play" type="button">Готово</button>
+    </div>
   </div>
   <div id="toast" class="toast"></div>
   <div class="progress"><div id="progressFill"></div></div>
@@ -535,7 +579,7 @@
     '# Вступление',
     'Добрый вечер. Сегодня я покажу, как работает **наш новый суфлер**. [посмотреть в камеру]',
     '',
-    'Он помещается в один файл, не требует сервера и открывается прямо с телефона. Самое важное: текст **читается через стекло**, а не с экрана.',
+    'Он помещается в один файл, не требует сервера и открывается прямо с телефона. Самое важное: {+текст **читается через стекло**}, а не с экрана.',
     '',
     '[пауза]',
     '---',
@@ -576,6 +620,7 @@
   var saveTimer = 0, toastTimer = 0, barTimer = 0;
   var fling = 0, flingV = 0, flingLast = 0; /* инерция перемотки на паузе */
   var stops = [], heads = []; /* позиции стоп-меток и заголовков в единицах pos, см. layout() */
+  var editing = false; /* правка текста на паузе, см. enterEdit() */
 
   function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
 
@@ -645,6 +690,7 @@
   }
 
   function layout() {
+    if (editing) return; // в правке сцена живёт по своим правилам, пересчитаем на выходе
     var h = stage.clientHeight;
     var guideY = Math.round(h * GUIDE_RATIO);
     track.style.paddingTop = guideY + 'px';
@@ -798,48 +844,113 @@
   var RE_INLINE = /(\*\*[^*\n]+\*\*|\[[^\]\n]+\])/g;
   var RE_WHO = /^([А-ЯЁA-Z][А-ЯЁA-Z0-9 .\-]{0,30}):(?=\s|$)/;
   var RE_STOP = /^---+\s*$/;
+  // Размер фрагмента. Уровень от −2 до +2 хранится на каждом символе, вложенных
+  // знаков не бывает: пересекающиеся правки просто складывают уровни посимвольно.
+  var RE_SIZE = /\{(\+\+?|--?)([^{}\n]+)\}/g;
+  var SZ_CLASS = { '-2': 's2', '-1': 's1', '1': 'b1', '2': 'b2' };
+  var SZ_MARK = { '-2': '--', '-1': '-', '1': '+', '2': '++' };
+  var SZ_LABEL = { '-2': '65%', '-1': '80%', '0': '100%', '1': '125%', '2': '150%' };
+  // Строка без знаков размера и уровень каждого её символа
+  function parseSize(raw) {
+    var s = '', lv = [], last = 0, m;
+    function push(t, l) { s += t; for (var i = 0; i < t.length; i++) lv.push(l); }
+    RE_SIZE.lastIndex = 0;
+    while ((m = RE_SIZE.exec(raw))) {
+      push(raw.slice(last, m.index), 0);
+      push(m[2], (m[1].charAt(0) === '+' ? 1 : -1) * m[1].length);
+      last = m.index + m[0].length;
+    }
+    push(raw.slice(last), 0);
+    return { s: s, lv: lv };
+  }
+  // Обратно в текст со знаками. Перенос строки и фигурные скобки размера не несут:
+  // знак не может тянуться через строку и не может содержать скобку.
+  function serializeSize(s, lv) {
+    function eff(i) {
+      var c = s.charAt(i);
+      return (c === '\n' || c === '{' || c === '}') ? 0 : (lv[i] || 0);
+    }
+    var out = '', i = 0;
+    while (i < s.length) {
+      var l = eff(i), j = i + 1;
+      while (j < s.length && eff(j) === l) j++;
+      out += l ? '{' + SZ_MARK[l] + s.slice(i, j) + '}' : s.slice(i, j);
+      i = j;
+    }
+    return out;
+  }
+  // Кусок строки [a, b) отрезками одного размера: текстовый узел или span.sz
+  function emitRuns(parent, s, lv, a, b) {
+    while (a < b) {
+      var l = lv[a] || 0, j = a + 1;
+      while (j < b && (lv[j] || 0) === l) j++;
+      var t = document.createTextNode(s.slice(a, j));
+      if (l) {
+        var sp = document.createElement('span');
+        sp.className = 'sz ' + SZ_CLASS[l];
+        sp.setAttribute('data-l', l);
+        sp.appendChild(t);
+        parent.appendChild(sp);
+      } else {
+        parent.appendChild(t);
+      }
+      a = j;
+    }
+  }
+  // Всегда построчно, и при выключенной разметке: data-i — номер исходной строки,
+  // по нему правка на паузе находит место в тексте и возвращается на него.
   function renderText() {
-    if (!S.markup) { track.textContent = text; return; }
     var frag = document.createDocumentFragment();
-    text.split('\n').forEach(function (raw) {
-      if (raw.slice(0, 2) === '//') return;
+    text.split('\n').forEach(function (raw, i) {
+      var p = S.markup ? parseSize(raw) : { s: raw, lv: [] };
+      var line = p.s, off = 0;
+      if (S.markup && line.slice(0, 2) === '//') return;
       var ln = document.createElement('div');
       ln.className = 'ln';
-      if (RE_STOP.test(raw)) { ln.className = 'ln stop'; frag.appendChild(ln); return; }
-      var line = raw;
-      if (line.slice(0, 2) === '# ') { ln.className = 'ln h'; line = line.slice(2); }
-      var m = RE_WHO.exec(line);
+      ln.setAttribute('data-i', i);
+      frag.appendChild(ln);
+      if (!S.markup) {
+        if (line) ln.textContent = line; else ln.appendChild(document.createElement('br'));
+        return;
+      }
+      if (RE_STOP.test(line)) { ln.className = 'ln stop'; return; }
+      if (line.slice(0, 2) === '# ') { ln.className = 'ln h'; off = 2; }
+      var m = RE_WHO.exec(line.slice(off));
       if (m) {
         var who = document.createElement('span');
         who.className = 'who';
         who.textContent = m[1] + ':';
         ln.appendChild(who);
-        line = line.slice(m[0].length).replace(/^\s+/, ''); // пробел после двоеточия даёт margin-right
+        off += m[0].length;
+        while (/\s/.test(line.charAt(off))) off++; // пробел после двоеточия даёт margin-right
       }
-      renderInline(ln, line);
-      frag.appendChild(ln);
+      renderInline(ln, line, p.lv, off);
     });
     track.textContent = '';
     track.appendChild(frag);
   }
-  function renderInline(parent, s) {
-    var last = 0, m;
-    RE_INLINE.lastIndex = 0;
+  function renderView() {
+    if (text.trim()) renderText(); else track.textContent = 'Текст пустой. Вернитесь назад и вставьте сценарий.';
+  }
+  // Акцент и ремарка снаружи, размер внутри: так любое пересечение даёт валидный DOM
+  function renderInline(parent, s, lv, from) {
+    var last = from, m;
+    RE_INLINE.lastIndex = from;
     while ((m = RE_INLINE.exec(s))) {
-      if (m.index > last) parent.appendChild(document.createTextNode(s.slice(last, m.index)));
-      var el = document.createElement('span');
-      if (m[0].charAt(0) === '*') { el.className = 'em'; el.textContent = m[0].slice(2, -2); }
-      else { el.className = 'note'; el.textContent = m[0].slice(1, -1); }
+      emitRuns(parent, s, lv, last, m.index);
+      var el = document.createElement('span'), pad = m[0].charAt(0) === '*' ? 2 : 1;
+      el.className = pad === 2 ? 'em' : 'note';
+      emitRuns(el, s, lv, m.index + pad, m.index + m[0].length - pad);
       parent.appendChild(el);
       last = m.index + m[0].length;
     }
-    if (last < s.length) parent.appendChild(document.createTextNode(s.slice(last)));
+    emitRuns(parent, s, lv, last, s.length);
     if (!parent.childNodes.length) parent.appendChild(document.createElement('br')); // пустая строка — не схлопывается
   }
   // Текст без служебных знаков — для счётчика слов
   function plainText(t) {
     if (!S.markup) return t;
-    return t.split('\n')
+    return t.replace(RE_SIZE, '$2').split('\n')
       .filter(function (l) { return l.slice(0, 2) !== '//' && !RE_STOP.test(l); })
       .join('\n')
       .replace(/\[[^\]\n]+\]/g, '').replace(/\*\*/g, '').replace(/^# /gm, '');
@@ -893,7 +1004,7 @@
     document.documentElement.setAttribute('data-mode', 'prompt');
     editor.hidden = true;
     prompter.hidden = false;
-    if (text.trim()) renderText(); else track.textContent = 'Текст пустой. Вернитесь назад и вставьте сценарий.';
+    renderView();
     pos = 0;
     playing = false;
     playBtn.textContent = 'Старт';
@@ -907,6 +1018,7 @@
     }
   }
   function exitPrompter() {
+    if (editing) finishEdit(true);
     pause();
     stopFling();
     releaseWake();
@@ -915,6 +1027,290 @@
     document.documentElement.removeAttribute('data-mode');
     prompter.hidden = true;
     editor.hidden = false;
+  }
+
+  /* ---------- Правка на паузе: ✎ → переносы и размер выделенного → «Готово» ---------- */
+  // В правке трек показывает исходный текст одним потоком (переносы — символы \n,
+  // знаки разметки буквально), размер виден как есть. Модель — строка без знаков
+  // размера плюс уровень каждого символа; DOM лишь её вид, после смены размера
+  // он строится заново.
+  var editBar = $('editBar'), sizeShow = $('sizeShow');
+  var editOrig = '', editPos = 0, editGuideY = 0, savedRange = null;
+
+  function textModel(t) {
+    if (!S.markup) return { s: t, lv: [] };
+    var parts = [], lv = [];
+    t.split('\n').forEach(function (raw, i) {
+      var p = parseSize(raw);
+      if (i) lv.push(0);
+      parts.push(p.s);
+      Array.prototype.push.apply(lv, p.lv);
+    });
+    return { s: parts.join('\n'), lv: lv };
+  }
+  function buildEdit(m) {
+    track.textContent = '';
+    emitRuns(track, m.s, m.lv, 0, m.s.length);
+    track.appendChild(document.createTextNode('\n')); // хвостовой перенос: без него курсор не встаёт на пустую последнюю строку
+  }
+  // Читает модель из DOM. Браузер в plaintext-only кладёт переносы символом \n,
+  // но <br> и блочные div от старых движков тоже понимаем.
+  function readDom(root) {
+    var s = '', lv = [];
+    (function walk(node, l) {
+      for (var c = node.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType === 3) {
+          s += c.data;
+          for (var i = 0; i < c.data.length; i++) lv.push(l);
+        } else if (c.nodeType === 1) {
+          if (c.tagName === 'BR') {
+            if (node === root || node.childNodes.length > 1) { s += '\n'; lv.push(0); }
+            continue;
+          }
+          if ((c.tagName === 'DIV' || c.tagName === 'P') && s) { s += '\n'; lv.push(0); }
+          var a = c.getAttribute('data-l');
+          walk(c, a ? Number(a) : l);
+        }
+      }
+    })(root, 0);
+    return { s: s.replace(/\r/g, ''), lv: lv };
+  }
+  function editModel() {
+    var m = readDom(track);
+    if (m.s.slice(-1) === '\n') { m.s = m.s.slice(0, -1); m.lv.pop(); }
+    return m;
+  }
+  function modelText(m) { return S.markup ? serializeSize(m.s, m.lv) : m.s; }
+  // Точка DOM → номер символа модели и обратно
+  function offsetOf(node, off) {
+    var r = document.createRange();
+    r.setStart(track, 0);
+    r.setEnd(node, off);
+    return readDom(r.cloneContents()).s.length;
+  }
+  function pointAt(o) {
+    var w = document.createTreeWalker(track, NodeFilter.SHOW_TEXT, null, false), acc = 0, n, lastNode = null;
+    while ((n = w.nextNode())) {
+      if (o <= acc + n.data.length) return { node: n, off: o - acc };
+      acc += n.data.length;
+      lastNode = n;
+    }
+    return lastNode ? { node: lastNode, off: lastNode.data.length } : { node: track, off: 0 };
+  }
+  function lineStarts(s) {
+    var r = [0], i = -1;
+    while ((i = s.indexOf('\n', i + 1)) >= 0) r.push(i + 1);
+    return r;
+  }
+  // Верх строки, начинающейся с символа o, в координатах окна
+  function lineTop(o) {
+    var a = pointAt(o), b = pointAt(o + 1), r = document.createRange();
+    r.setStart(a.node, a.off);
+    r.setEnd(b.node, b.off);
+    var rects = r.getClientRects();
+    return (rects.length ? rects[0] : r.getBoundingClientRect()).top;
+  }
+  function currentRange() {
+    var sel = window.getSelection();
+    if (sel && sel.rangeCount && track.contains(sel.anchorNode) && track.contains(sel.focusNode)) return sel.getRangeAt(0);
+    return savedRange && track.contains(savedRange.startContainer) ? savedRange : null;
+  }
+  function setSel(a, b) {
+    var p = pointAt(a), q = pointAt(b), r = document.createRange();
+    r.setStart(p.node, p.off);
+    r.setEnd(q.node, q.off);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    savedRange = r.cloneRange();
+  }
+  // Что показать между A− и A+: размер выделения или «разн.»
+  function updateSizeShow() {
+    var r = currentRange(), levels = [];
+    function levelOf(n) {
+      var el = n.nodeType === 3 ? n.parentNode : n;
+      var a = el !== track && el.getAttribute ? el.getAttribute('data-l') : null;
+      return a ? Number(a) : 0;
+    }
+    if (r && r.collapsed) {
+      levels.push(levelOf(r.startContainer));
+    } else if (r) {
+      var w = document.createTreeWalker(track, NodeFilter.SHOW_TEXT, null, false), n, nr = document.createRange();
+      while ((n = w.nextNode())) {
+        if (!n.data.trim()) continue;
+        nr.selectNodeContents(n);
+        if (r.compareBoundaryPoints(Range.END_TO_START, nr) < 0 && r.compareBoundaryPoints(Range.START_TO_END, nr) > 0) {
+          var l = levelOf(n);
+          if (levels.indexOf(l) < 0) levels.push(l);
+        }
+      }
+    }
+    sizeShow.textContent = levels.length > 1 ? 'разн.' : SZ_LABEL[levels.length ? levels[0] : 0];
+  }
+  // A− / A+: уровень каждого символа выделения сдвигается на d. Без выделения — вся строка с курсором.
+  function applySize(d) {
+    var r = currentRange();
+    if (!r) return;
+    var m = editModel(), n = m.s.length;
+    var a = Math.min(offsetOf(r.startContainer, r.startOffset), n);
+    var b = Math.min(offsetOf(r.endContainer, r.endOffset), n);
+    var ca = a, cb = b;
+    if (a === b) {
+      a = m.s.lastIndexOf('\n', a - 1) + 1;
+      b = m.s.indexOf('\n', b);
+      if (b < 0) b = n;
+    }
+    if (a === b) return;
+    for (var i = a; i < b; i++) {
+      if (m.s.charAt(i) !== '\n') m.lv[i] = clamp((m.lv[i] || 0) + d, -2, 2);
+    }
+    var st = stage.scrollTop;
+    buildEdit(m);
+    stage.scrollTop = st;
+    setSel(ca, cb);
+    updateSizeShow();
+  }
+  // Панель правки держится над клавиатурой: на iPhone клавиатура не меняет размер
+  // страницы, а накрывает её, видимую часть знает только visualViewport.
+  function placeEditBar() {
+    if (!editing) return;
+    var vv = window.visualViewport, kb = 0;
+    if (vv) kb = Math.max(0, prompter.clientHeight - vv.offsetTop - vv.height);
+    editBar.style.bottom = kb + 'px';
+    editBar.classList.toggle('kb', kb > 60);
+    stage.style.bottom = (kb + editBar.offsetHeight) + 'px'; // прокручиваемая область — только то, что видно
+  }
+
+  function enterEdit() {
+    if (editing || mode !== 'prompt') return;
+    pause();
+    stopFling();
+    var guideY = Math.round(stage.clientHeight * GUIDE_RATIO);
+    // Строка у линии чтения и насколько она уже проехала
+    var lns = track.querySelectorAll('.ln'), idx = 0, delta = 0;
+    for (var i = 0; i < lns.length; i++) {
+      var p = lns[i].offsetTop - guideY;
+      if (p > pos + 1) break;
+      idx = Number(lns[i].getAttribute('data-i'));
+      delta = pos - p;
+    }
+    editing = true;
+    editOrig = text;
+    editPos = pos;
+    editGuideY = guideY;
+    var m = textModel(text);
+    stage.classList.remove('mh', 'mv'); // в зеркале печатать невозможно
+    stage.classList.add('editing');
+    prompter.classList.add('editing');
+    track.style.transform = '';
+    buildEdit(m);
+    try { track.contentEditable = 'plaintext-only'; } catch (e) { track.contentEditable = 'true'; }
+    track.setAttribute('spellcheck', 'false');
+    $('sizeGroup').hidden = !S.markup;
+    editBar.hidden = false;
+    placeEditBar();
+    var starts = lineStarts(m.s), o = starts[Math.min(idx, starts.length - 1)];
+    var tr = track.getBoundingClientRect();
+    stage.scrollTop = Math.max(0, lineTop(o) - tr.top - guideY + delta);
+    // Курсор — в строку на линии чтения; фокус в этом же обработчике касания, иначе iOS не откроет клавиатуру
+    var r = null, x = tr.left + parseFloat(getComputedStyle(track).paddingLeft) + 4;
+    var y = stage.getBoundingClientRect().top + guideY + S.font * 0.5;
+    if (document.caretRangeFromPoint) r = document.caretRangeFromPoint(x, y);
+    if (r && track.contains(r.startContainer)) {
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      savedRange = r.cloneRange();
+    } else {
+      setSel(o, o);
+    }
+    try { track.focus({ preventScroll: true }); } catch (e) { track.focus(); }
+    updateSizeShow();
+  }
+  function finishEdit(keep) {
+    if (!editing) return;
+    var m = editModel(), idx = 0, delta = 0;
+    if (keep) {
+      // Строка, оказавшаяся у линии чтения: с неё и продолжим
+      var gAbs = stage.getBoundingClientRect().top + editGuideY, starts = lineStarts(m.s);
+      for (var i = 0; i < starts.length; i++) {
+        var top = lineTop(starts[i]);
+        if (top > gAbs + 1) break;
+        idx = i;
+        delta = gAbs - top;
+      }
+    }
+    editing = false;
+    savedRange = null;
+    track.blur();
+    track.removeAttribute('contenteditable');
+    track.removeAttribute('spellcheck');
+    stage.scrollTop = 0; // у overflow: hidden прокрутка осталась бы смещением
+    stage.style.bottom = '';
+    stage.classList.remove('editing');
+    prompter.classList.remove('editing');
+    editBar.hidden = true;
+    var changed = false;
+    if (keep) {
+      var t = modelText(m);
+      changed = t !== editOrig;
+      text = t;
+      textarea.value = text;
+      save(KEY_TEXT, text);
+    }
+    renderView();
+    applySettings(); // вернёт зеркало и пересчитает layout()
+    if (keep) {
+      var lns = track.querySelectorAll('.ln'), guideY = Math.round(stage.clientHeight * GUIDE_RATIO), np = 0, cap = maxPos;
+      for (var k = 0; k < lns.length; k++) {
+        var li = Number(lns[k].getAttribute('data-i'));
+        if (li < idx) continue;
+        np = lns[k].offsetTop - guideY + (li === idx ? delta : 0);
+        if (k + 1 < lns.length) cap = Math.max(lns[k].offsetTop - guideY, lns[k + 1].offsetTop - guideY - 1);
+        break;
+      }
+      if (lns.length && Number(lns[lns.length - 1].getAttribute('data-i')) < idx) np = maxPos;
+      pos = clamp(Math.min(np, cap), 0, maxPos);
+    } else {
+      pos = clamp(editPos, 0, maxPos);
+    }
+    render();
+    showBar();
+    if (changed) toast('Правки сохранены', 1200);
+  }
+
+  $('editBtn').addEventListener('click', enterEdit);
+  $('editDone').addEventListener('click', function () { finishEdit(true); });
+  $('editCancel').addEventListener('click', function () {
+    if (modelText(editModel()) === editOrig || confirm('Отменить правки?')) finishEdit(false);
+  });
+  $('sizeDown').addEventListener('click', function () { applySize(-1); });
+  $('sizeUp').addEventListener('click', function () { applySize(1); });
+  // Нажатие на панель не должно снимать выделение в тексте
+  editBar.addEventListener('mousedown', function (e) { e.preventDefault(); });
+  document.addEventListener('selectionchange', function () {
+    if (!editing) return;
+    var sel = window.getSelection();
+    if (sel && sel.rangeCount && track.contains(sel.anchorNode) && track.contains(sel.focusNode)) {
+      savedRange = sel.getRangeAt(0).cloneRange();
+    }
+    updateSizeShow();
+  });
+  track.addEventListener('input', function () {
+    if (!editing) return;
+    var lc = track.lastChild;
+    if (!lc || lc.nodeType !== 3 || lc.data.slice(-1) !== '\n') track.appendChild(document.createTextNode('\n'));
+  });
+  // Запасной режим contenteditable="true" (движки без plaintext-only): вставка только простым текстом
+  track.addEventListener('paste', function (e) {
+    if (!editing || track.contentEditable === 'plaintext-only') return;
+    e.preventDefault();
+    var t = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, t.replace(/\r\n?/g, '\n'));
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', placeEditBar);
+    window.visualViewport.addEventListener('scroll', placeEditBar);
   }
 
   /* ---------- Editor events ---------- */
@@ -963,6 +1359,8 @@
     '- --- — стоп-метка на отдельной строке. Прокрутка остановится здесь, пока ведущий не коснётся экрана. Ставь там, где нужно дождаться ответа, реакции зала или демонстрации.',
     '- ИМЯ: — в начале строки заглавными, реплика говорящего в диалоге или интервью.',
     '- // — в начале строки: служебная заметка автору, в суфлере не показывается.',
+    '- {+фраза} и {++фраза} — крупнее, {-фраза} и {--фраза} — мельче. Скорость прокрутки постоянная, поэтому крупный фрагмент читается медленнее, мелкий быстрее. Используй редко: крупно для ключевой мысли, мелко для проходных оговорок. Знак не переходит на другую строку.',
+    '- Пустая строка — короткая пауза. Две-три пустые строки подряд — длинная пауза, например перед новой мыслью.',
     '',
     'Как писать:',
     '- Короткие предложения, разговорный ритм: это речь, а не статья.',
@@ -1052,6 +1450,7 @@
 
   var pd = null;
   stage.addEventListener('pointerdown', function (e) {
+    if (editing) return; // в правке касания принадлежат тексту
     var caught = fling !== 0 || cdTimer !== 0; // поймал летящий текст или прервал отсчёт — это не тап
     stopFling();
     if (cdTimer) pause();
@@ -1097,6 +1496,7 @@
   document.addEventListener('keydown', function (e) {
     if (mode !== 'prompt') return;
     var k = e.key;
+    if (editing) { if (k === 'Escape') { e.preventDefault(); finishEdit(true); } return; } // клавиши печатают текст
     if (k === ' ' || k === 'Enter' || k === 'MediaPlayPause') { e.preventDefault(); togglePlay(); }
     else if (k === 'ArrowUp') { e.preventDefault(); setSpeed(S.speed + 2); }
     else if (k === 'ArrowDown') { e.preventDefault(); setSpeed(S.speed - 2); }
@@ -1116,6 +1516,7 @@
     else if (k === 'm' || k === 'M' || k === 'ь' || k === 'Ь') { toggleMirror('mirrorH'); }
     else if (k === 'v' || k === 'V' || k === 'м' || k === 'М') { toggleMirror('mirrorV'); }
     else if (k === 'f' || k === 'F' || k === 'а' || k === 'А') { toggleFullscreen(); }
+    else if (k === 'e' || k === 'E' || k === 'у' || k === 'У') { e.preventDefault(); enterEdit(); }
     else if (k === 'Escape') { exitPrompter(); }
   });
 
