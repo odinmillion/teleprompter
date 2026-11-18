@@ -246,6 +246,11 @@
   .who { color: #F0B43C; margin-right: 0.3em; }
   .stop { height: 0; margin: 0.45em 0; border-top: 2px dashed rgba(255, 255, 255, 0.35); }
   /* размер фрагмента: от {----…} до {++++…}; {+} на отдельной строке — пустая строка этого размера */
+  /* Высоту ряда должен задавать только текст, который в нём стоит. Обычно её снизу
+     подпирает шрифт самого блока, и мелкий фрагмент ряд не уменьшает. Поэтому у блока
+     line-height: 0, а весь текст лежит в span.sz со своим line-height. */
+  .ln.fl { line-height: 0; }
+  .fl .sz, .fl .who { line-height: 1.3; }
   .sz.s4 { font-size: 0.4em; }
   .sz.s3 { font-size: 0.5em; }
   .sz.s2 { font-size: 0.65em; }
@@ -272,7 +277,9 @@
     will-change: auto;
     user-select: text;
     -webkit-user-select: text;
+    line-height: 0; /* см. .ln.fl */
   }
+  .stage.editing .track .sz { line-height: 1.3; }
   .stage.editing .guide, .stage.editing .readout { display: none; }
   .prompter.editing #bar, .prompter.editing .progress { display: none; }
   .editbar { z-index: 4; }
@@ -886,21 +893,16 @@
     }
     return out;
   }
-  // Кусок строки [a, b) отрезками одного размера: текстовый узел или span.sz
+  // Кусок строки [a, b) отрезками одного размера, каждый в своём span.sz
   function emitRuns(parent, s, lv, a, b) {
     while (a < b) {
       var l = lv[a] || 0, j = a + 1;
       while (j < b && (lv[j] || 0) === l) j++;
-      var t = document.createTextNode(s.slice(a, j));
-      if (l) {
-        var sp = document.createElement('span');
-        sp.className = 'sz ' + szClass(l);
-        sp.setAttribute('data-l', l);
-        sp.appendChild(t);
-        parent.appendChild(sp);
-      } else {
-        parent.appendChild(t);
-      }
+      var sp = document.createElement('span');
+      sp.className = l ? 'sz ' + szClass(l) : 'sz'; // и обычный размер тоже в span: см. .ln.fl
+      sp.setAttribute('data-l', l);
+      sp.appendChild(document.createTextNode(s.slice(a, j)));
+      parent.appendChild(sp);
       a = j;
     }
   }
@@ -923,7 +925,8 @@
       if (RE_STOP.test(line)) { ln.className = 'ln stop'; return; }
       var bl = RE_BLANK.exec(raw);
       if (bl) { ln.className = 'ln sz ' + szClass(markLevel(bl[1])); ln.appendChild(document.createElement('br')); return; }
-      if (line.slice(0, 2) === '# ') { ln.className = 'ln h'; off = 2; }
+      ln.className = 'ln fl';
+      if (line.slice(0, 2) === '# ') { ln.className = 'ln fl h'; off = 2; }
       var m = RE_WHO.exec(line.slice(off));
       if (m) {
         var who = document.createElement('span');
@@ -954,7 +957,10 @@
       last = m.index + m[0].length;
     }
     emitRuns(parent, s, lv, last, s.length);
-    if (!parent.childNodes.length) parent.appendChild(document.createElement('br')); // пустая строка — не схлопывается
+    if (!parent.childNodes.length) { // пустая строка — не схлопывается: ей высоту даёт сам блок
+      parent.classList.remove('fl');
+      parent.appendChild(document.createElement('br'));
+    }
   }
   // Текст без служебных знаков — для счётчика слов
   function plainText(t) {
@@ -1078,7 +1084,33 @@
   function buildEdit(m) {
     track.textContent = '';
     // хвостовой перенос: без него курсор не встаёт на пустую последнюю строку
-    emitRuns(track, m.s + '\n', m.lv, 0, m.s.length + 1);
+    // Перенос в конце непустой строки стоит в её последнем ряду и своей высотой
+    // подпирал бы его, поэтому рисуем его размером соседнего символа.
+    var lv = m.lv.slice();
+    for (var i = 1; i < lv.length; i++) if (!sizable(m, i)) lv[i] = lv[i - 1] || 0;
+    emitRuns(track, m.s + '\n', lv, 0, m.s.length + 1);
+  }
+  // Браузер иногда кладёт набранное прямо в трек, мимо span: там line-height нулевой
+  // и строки слипаются. Заворачиваем такие узлы, не теряя курсор.
+  function wrapStray() {
+    var sel = window.getSelection(), an = sel && sel.anchorNode, ao = sel ? sel.anchorOffset : 0;
+    for (var c = track.firstChild; c; c = c.nextSibling) {
+      if (c.nodeType !== 3) continue;
+      var sp = document.createElement('span');
+      sp.className = 'sz';
+      sp.setAttribute('data-l', 0);
+      track.replaceChild(sp, c);
+      sp.appendChild(c);
+      if (an === c) sel.collapse(c, ao);
+      c = sp;
+    }
+    if (track.textContent.slice(-1) !== '\n') {
+      var tail = document.createElement('span');
+      tail.className = 'sz';
+      tail.setAttribute('data-l', 0);
+      tail.appendChild(document.createTextNode('\n'));
+      track.appendChild(tail);
+    }
   }
   // Читает модель из DOM. Браузер в plaintext-only кладёт переносы символом \n,
   // но <br> и блочные div от старых движков тоже понимаем.
@@ -1317,7 +1349,7 @@
   });
   track.addEventListener('input', function () {
     if (!editing) return;
-    if (track.textContent.slice(-1) !== '\n') track.appendChild(document.createTextNode('\n'));
+    wrapStray();
   });
   // Запасной режим contenteditable="true" (движки без plaintext-only): вставка только простым текстом
   track.addEventListener('paste', function (e) {
