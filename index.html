@@ -245,11 +245,15 @@
   .note { color: #8E949C; font-size: 0.7em; font-weight: 500; }
   .who { color: #F0B43C; margin-right: 0.3em; }
   .stop { height: 0; margin: 0.45em 0; border-top: 2px dashed rgba(255, 255, 255, 0.35); }
-  /* размер фрагмента: {--…} {-…} {+…} {++…} */
+  /* размер фрагмента: от {----…} до {++++…}; {+} на отдельной строке — пустая строка этого размера */
+  .sz.s4 { font-size: 0.4em; }
+  .sz.s3 { font-size: 0.5em; }
   .sz.s2 { font-size: 0.65em; }
   .sz.s1 { font-size: 0.8em; }
   .sz.b1 { font-size: 1.25em; }
   .sz.b2 { font-size: 1.5em; }
+  .sz.b3 { font-size: 1.75em; }
+  .sz.b4 { font-size: 2em; }
   /* правка на паузе: сцена становится обычной прокручиваемой областью с выделением */
   .stage.editing {
     overflow-y: auto;
@@ -489,8 +493,8 @@
     <code>---</code> на отдельной строке — стоп-метка: прокрутка остановится до касания.<br>
     <code>ИМЯ:</code> заглавными в начале строки — реплика в диалоге.<br>
     <code>//</code> в начале строки — строка скрыта.<br>
-    <code>{+крупнее}</code>, <code>{++ещё крупнее}</code>, <code>{-мельче}</code>, <code>{--ещё мельче}</code> — размер фрагмента: крупный текст читается медленнее, мелкий быстрее.<br>
-    Пустые строки дают паузу: чем их больше, тем она длиннее.<br>
+    <code>{+крупнее}</code>, <code>{-мельче}</code> — размер фрагмента: крупный текст читается медленнее, мелкий быстрее. Плюсов или минусов можно ставить до четырёх: от <code>{----текст}</code> до <code>{++++текст}</code>.<br>
+    Пустые строки дают паузу: чем их больше, тем она длиннее. <code>{++}</code> на отдельной строке — пустая строка увеличенного размера, пауза длиннее.<br>
     Кнопка ✎ в суфлере открывает правку на месте: добавьте переносов или выделите фрагмент и поменяйте размер кнопками A− и A+, затем «Готово».<br>
     Разметку можно выключить в настройках.
   </p>
@@ -846,10 +850,13 @@
   var RE_STOP = /^---+\s*$/;
   // Размер фрагмента. Уровень от −2 до +2 хранится на каждом символе, вложенных
   // знаков не бывает: пересекающиеся правки просто складывают уровни посимвольно.
-  var RE_SIZE = /\{(\+\+?|--?)([^{}\n]+)\}/g;
-  var SZ_CLASS = { '-2': 's2', '-1': 's1', '1': 'b1', '2': 'b2' };
-  var SZ_MARK = { '-2': '--', '-1': '-', '1': '+', '2': '++' };
-  var SZ_LABEL = { '-2': '65%', '-1': '80%', '0': '100%', '1': '125%', '2': '150%' };
+  var SZ_MAX = 4;
+  var RE_SIZE = /\{(\+{1,4}|-{1,4})([^{}\n]+)\}/g;
+  var RE_BLANK = /^\{(\+{1,4}|-{1,4})\}$/; // пустая строка со своим размером: так пауза становится длиннее или короче
+  var SZ_LABEL = { '-4': '40%', '-3': '50%', '-2': '65%', '-1': '80%', '0': '100%', '1': '125%', '2': '150%', '3': '175%', '4': '200%' };
+  function szClass(l) { return (l > 0 ? 'b' : 's') + Math.abs(l); }
+  function szMark(l) { return new Array(Math.abs(l) + 1).join(l > 0 ? '+' : '-'); }
+  function markLevel(m) { return (m.charAt(0) === '+' ? 1 : -1) * m.length; }
   // Строка без знаков размера и уровень каждого её символа
   function parseSize(raw) {
     var s = '', lv = [], last = 0, m;
@@ -857,7 +864,7 @@
     RE_SIZE.lastIndex = 0;
     while ((m = RE_SIZE.exec(raw))) {
       push(raw.slice(last, m.index), 0);
-      push(m[2], (m[1].charAt(0) === '+' ? 1 : -1) * m[1].length);
+      push(m[2], markLevel(m[1]));
       last = m.index + m[0].length;
     }
     push(raw.slice(last), 0);
@@ -874,7 +881,7 @@
     while (i < s.length) {
       var l = eff(i), j = i + 1;
       while (j < s.length && eff(j) === l) j++;
-      out += l ? '{' + SZ_MARK[l] + s.slice(i, j) + '}' : s.slice(i, j);
+      out += l ? '{' + szMark(l) + s.slice(i, j) + '}' : s.slice(i, j);
       i = j;
     }
     return out;
@@ -887,7 +894,7 @@
       var t = document.createTextNode(s.slice(a, j));
       if (l) {
         var sp = document.createElement('span');
-        sp.className = 'sz ' + SZ_CLASS[l];
+        sp.className = 'sz ' + szClass(l);
         sp.setAttribute('data-l', l);
         sp.appendChild(t);
         parent.appendChild(sp);
@@ -914,6 +921,8 @@
         return;
       }
       if (RE_STOP.test(line)) { ln.className = 'ln stop'; return; }
+      var bl = RE_BLANK.exec(raw);
+      if (bl) { ln.className = 'ln sz ' + szClass(markLevel(bl[1])); ln.appendChild(document.createElement('br')); return; }
       if (line.slice(0, 2) === '# ') { ln.className = 'ln h'; off = 2; }
       var m = RE_WHO.exec(line.slice(off));
       if (m) {
@@ -950,7 +959,7 @@
   // Текст без служебных знаков — для счётчика слов
   function plainText(t) {
     if (!S.markup) return t;
-    return t.replace(RE_SIZE, '$2').split('\n')
+    return t.replace(/^\{(\+{1,4}|-{1,4})\}$/gm, '').replace(RE_SIZE, '$2').split('\n')
       .filter(function (l) { return l.slice(0, 2) !== '//' && !RE_STOP.test(l); })
       .join('\n')
       .replace(/\[[^\]\n]+\]/g, '').replace(/\*\*/g, '').replace(/^# /gm, '');
@@ -1037,21 +1046,39 @@
   var editBar = $('editBar'), sizeShow = $('sizeShow');
   var editOrig = '', editPos = 0, editGuideY = 0, savedRange = null;
 
+  // Модель: s — текст без знаков размера, lv — уровень каждого символа плюс ещё один
+  // элемент в конце. Уровень переноса, закрывающего строку, значим только для пустой
+  // строки — это её размер (в тексте `{+}`); lv[s.length] закрывает последнюю строку.
   function textModel(t) {
-    if (!S.markup) return { s: t, lv: [] };
     var parts = [], lv = [];
-    t.split('\n').forEach(function (raw, i) {
-      var p = parseSize(raw);
-      if (i) lv.push(0);
+    t.split('\n').forEach(function (raw) {
+      var bl = S.markup ? RE_BLANK.exec(raw) : null;
+      var p = bl ? { s: '', lv: [] } : S.markup ? parseSize(raw) : { s: raw, lv: [] };
       parts.push(p.s);
-      Array.prototype.push.apply(lv, p.lv);
+      for (var i = 0; i < p.s.length; i++) lv.push(p.lv[i] || 0);
+      lv.push(bl ? markLevel(bl[1]) : 0);
     });
     return { s: parts.join('\n'), lv: lv };
   }
+  function modelText(m) {
+    if (!S.markup) return m.s;
+    var out = [], a = 0;
+    m.s.split('\n').forEach(function (line) {
+      var term = m.lv[a + line.length] || 0;
+      out.push(line ? serializeSize(line, m.lv.slice(a, a + line.length)) : term ? '{' + szMark(term) + '}' : '');
+      a += line.length + 1;
+    });
+    return out.join('\n');
+  }
+  // Перенос несёт размер, только если закрывает пустую строку
+  function sizable(m, i) {
+    if (i < m.s.length && m.s.charAt(i) !== '\n') return true;
+    return i === 0 || m.s.charAt(i - 1) === '\n';
+  }
   function buildEdit(m) {
     track.textContent = '';
-    emitRuns(track, m.s, m.lv, 0, m.s.length);
-    track.appendChild(document.createTextNode('\n')); // хвостовой перенос: без него курсор не встаёт на пустую последнюю строку
+    // хвостовой перенос: без него курсор не встаёт на пустую последнюю строку
+    emitRuns(track, m.s + '\n', m.lv, 0, m.s.length + 1);
   }
   // Читает модель из DOM. Браузер в plaintext-only кладёт переносы символом \n,
   // но <br> и блочные div от старых движков тоже понимаем.
@@ -1077,10 +1104,10 @@
   }
   function editModel() {
     var m = readDom(track);
-    if (m.s.slice(-1) === '\n') { m.s = m.s.slice(0, -1); m.lv.pop(); }
+    if (m.s.slice(-1) === '\n') m.s = m.s.slice(0, -1); else m.lv.push(0);
+    for (var i = 0; i < m.lv.length; i++) if (!sizable(m, i)) m.lv[i] = 0;
     return m;
   }
-  function modelText(m) { return S.markup ? serializeSize(m.s, m.lv) : m.s; }
   // Точка DOM → номер символа модели и обратно
   function offsetOf(node, off) {
     var r = document.createRange();
@@ -1124,50 +1151,42 @@
     sel.addRange(r);
     savedRange = r.cloneRange();
   }
+  // Выделение в символах модели. Без выделения — вся строка с курсором, включая её перенос.
+  function selSpan(m) {
+    var r = currentRange();
+    if (!r) return null;
+    var n = m.s.length;
+    var a = Math.min(offsetOf(r.startContainer, r.startOffset), n);
+    var rawB = offsetOf(r.endContainer, r.endOffset), b = Math.min(rawB, n);
+    var sp = { ca: a, cb: b, a: a, b: rawB > n ? n + 1 : b }; // выделение до самого конца захватывает и последнюю пустую строку
+    if (a === b) {
+      sp.a = m.s.lastIndexOf('\n', a - 1) + 1;
+      sp.b = m.s.indexOf('\n', b);
+      sp.b = (sp.b < 0 ? n : sp.b) + 1;
+    }
+    return sp;
+  }
   // Что показать между A− и A+: размер выделения или «разн.»
   function updateSizeShow() {
-    var r = currentRange(), levels = [];
-    function levelOf(n) {
-      var el = n.nodeType === 3 ? n.parentNode : n;
-      var a = el !== track && el.getAttribute ? el.getAttribute('data-l') : null;
-      return a ? Number(a) : 0;
-    }
-    if (r && r.collapsed) {
-      levels.push(levelOf(r.startContainer));
-    } else if (r) {
-      var w = document.createTreeWalker(track, NodeFilter.SHOW_TEXT, null, false), n, nr = document.createRange();
-      while ((n = w.nextNode())) {
-        if (!n.data.trim()) continue;
-        nr.selectNodeContents(n);
-        if (r.compareBoundaryPoints(Range.END_TO_START, nr) < 0 && r.compareBoundaryPoints(Range.START_TO_END, nr) > 0) {
-          var l = levelOf(n);
-          if (levels.indexOf(l) < 0) levels.push(l);
-        }
+    var m = editModel(), sp = selSpan(m), levels = [];
+    if (sp) {
+      for (var i = sp.a; i < sp.b; i++) {
+        if (sizable(m, i) && levels.indexOf(m.lv[i] || 0) < 0) levels.push(m.lv[i] || 0);
       }
     }
     sizeShow.textContent = levels.length > 1 ? 'разн.' : SZ_LABEL[levels.length ? levels[0] : 0];
   }
-  // A− / A+: уровень каждого символа выделения сдвигается на d. Без выделения — вся строка с курсором.
+  // A− / A+: уровень каждого символа выделения сдвигается на d
   function applySize(d) {
-    var r = currentRange();
-    if (!r) return;
-    var m = editModel(), n = m.s.length;
-    var a = Math.min(offsetOf(r.startContainer, r.startOffset), n);
-    var b = Math.min(offsetOf(r.endContainer, r.endOffset), n);
-    var ca = a, cb = b;
-    if (a === b) {
-      a = m.s.lastIndexOf('\n', a - 1) + 1;
-      b = m.s.indexOf('\n', b);
-      if (b < 0) b = n;
-    }
-    if (a === b) return;
-    for (var i = a; i < b; i++) {
-      if (m.s.charAt(i) !== '\n') m.lv[i] = clamp((m.lv[i] || 0) + d, -2, 2);
+    var m = editModel(), sp = selSpan(m);
+    if (!sp) return;
+    for (var i = sp.a; i < sp.b; i++) {
+      if (sizable(m, i)) m.lv[i] = clamp((m.lv[i] || 0) + d, -SZ_MAX, SZ_MAX);
     }
     var st = stage.scrollTop;
     buildEdit(m);
     stage.scrollTop = st;
-    setSel(ca, cb);
+    setSel(sp.ca, sp.cb);
     updateSizeShow();
   }
   // Панель правки держится над клавиатурой: на iPhone клавиатура не меняет размер
@@ -1298,8 +1317,7 @@
   });
   track.addEventListener('input', function () {
     if (!editing) return;
-    var lc = track.lastChild;
-    if (!lc || lc.nodeType !== 3 || lc.data.slice(-1) !== '\n') track.appendChild(document.createTextNode('\n'));
+    if (track.textContent.slice(-1) !== '\n') track.appendChild(document.createTextNode('\n'));
   });
   // Запасной режим contenteditable="true" (движки без plaintext-only): вставка только простым текстом
   track.addEventListener('paste', function (e) {
@@ -1359,8 +1377,8 @@
     '- --- — стоп-метка на отдельной строке. Прокрутка остановится здесь, пока ведущий не коснётся экрана. Ставь там, где нужно дождаться ответа, реакции зала или демонстрации.',
     '- ИМЯ: — в начале строки заглавными, реплика говорящего в диалоге или интервью.',
     '- // — в начале строки: служебная заметка автору, в суфлере не показывается.',
-    '- {+фраза} и {++фраза} — крупнее, {-фраза} и {--фраза} — мельче. Скорость прокрутки постоянная, поэтому крупный фрагмент читается медленнее, мелкий быстрее. Используй редко: крупно для ключевой мысли, мелко для проходных оговорок. Знак не переходит на другую строку.',
-    '- Пустая строка — короткая пауза. Две-три пустые строки подряд — длинная пауза, например перед новой мыслью.',
+    '- {+фраза} — крупнее, {-фраза} — мельче; плюсов или минусов от одного до четырёх, шаг примерно 25 %. Скорость прокрутки постоянная, поэтому крупный фрагмент читается медленнее, мелкий быстрее. Используй редко: крупно для ключевой мысли, мелко для проходных оговорок. Знак не переходит на другую строку.',
+    '- Пустая строка — короткая пауза. Две-три пустые строки подряд — длинная пауза, например перед новой мыслью. Строка из одного знака {++} — пустая строка увеличенного размера.',
     '',
     'Как писать:',
     '- Короткие предложения, разговорный ритм: это речь, а не статья.',
